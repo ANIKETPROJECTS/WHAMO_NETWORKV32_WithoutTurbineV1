@@ -29,7 +29,7 @@ Preferred communication style: Simple, everyday language.
 
 ### Data Storage
 - **Primary Storage**: MongoDB (via Mongoose) — connection URI stored in the `MONGODB_URI` Replit Secret
-- **Auth**: JWT-based; secret stored in the `JWT_SECRET` environment variable (set in `.replit` `[userenv.shared]`)
+- **Auth**: JWT-based; signing key comes from the `JWT_SECRET` secret, or `SESSION_SECRET` when no separate JWT secret is configured.
 - **Schema Location**: `shared/schema.ts` contains type definitions and Zod validation schemas
 
 ### Project Structure
@@ -102,6 +102,7 @@ Preferred communication style: Simple, everyday language.
 
 ### Replit setup status
 - Run `npm run setup:replit` after importing or cloning to install root dependencies from `package-lock.json` and workspace dependencies from `GRAPHVISUALIZATIONCODE/pnpm-lock.yaml`.
+- PDF export requires the direct `dompurify` dependency. Keep the current safe version installed: the older optional version was blocked by the package firewall and left Vite unable to compile the Designer.
 - Run `npm run dev` to start the WHAMO Designer.
 - Run `cd GRAPHVISUALIZATIONCODE && pnpm run typecheck` to check the standalone workspace.
 - Run `cd GRAPHVISUALIZATIONCODE && pnpm run build` to build the standalone viewer, API, and preview packages.
