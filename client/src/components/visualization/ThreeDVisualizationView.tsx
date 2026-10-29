@@ -9,7 +9,6 @@ import yIntersectionIcon from "@assets/y-intersection_(1)_1779523210044.png";
 import waterTankIcon from "@assets/water-tank_(2)_1779523360829.png";
 import waterPumpIcon from "@assets/water-pump_1779523451215.png";
 import pipeIcon from "@assets/pipe_1779523475650.png";
-import turbineImgIcon from "@assets/turbine_1779523517554.png";
 import windIcon from "@assets/wind_1779523398812.png";
 
 interface ThreeDVisualizationViewProps {
@@ -30,7 +29,6 @@ const NODE_COLORS: Record<string, number> = {
   flowBoundary: 0x0891b2,
   pump: 0xdc2626,
   checkValve: 0x9333ea,
-  turbine: 0x059669,
 };
 
 const NODE_LABELS: Record<string, string> = {
@@ -41,7 +39,6 @@ const NODE_LABELS: Record<string, string> = {
   flowBoundary: "Flow boundary",
   pump: "Legacy element",
   checkValve: "Legacy element",
-  turbine: "Turbine",
 };
 
 // Icon URL map — same PNGs as the 2D view
@@ -52,7 +49,6 @@ const ICON_URLS: Record<string, string> = {
   flowBoundary: windIcon,
   pump: waterPumpIcon,
   checkValve: pipeIcon,
-  turbine: turbineImgIcon,
 };
 
 // Module-level texture cache so textures survive hot-reloads
@@ -239,7 +235,7 @@ function addNodeModel(
   group.add(sphere);
 }
 
-const INLINE_ELEMENT_TYPES = new Set(["pump", "checkValve", "turbine"]);
+const INLINE_ELEMENT_TYPES = new Set(["pump", "checkValve"]);
 
 function addPipeModel(
   edge: WhamoEdge,
@@ -308,7 +304,7 @@ function addPipeModel(
   }
 }
 
-// Sphere + icon ball placed at the midpoint of an inline-element edge (pump / checkValve / turbine)
+// Sphere + icon ball placed at the midpoint of an inline-element edge (pump / checkValve)
 function addInlineElementBall(
   edge: WhamoEdge,
   source: THREE.Vector3,
@@ -614,7 +610,7 @@ export function ThreeDVisualizationView({
         const target = modelPositions.get(String(edge.target));
         if (source && target) {
           addPipeModel(edge, source, target, graphGroup);
-          // Add inline element ball for pump / checkValve / turbine edges
+          // Add inline element ball for pump / checkValve edges
           if (INLINE_ELEMENT_TYPES.has((edge.data?.type as string) ?? "")) {
             addInlineElementBall(edge, source, target, graphGroup, textures);
           }

@@ -85,7 +85,6 @@ import nodeCircleIcon from "@assets/button_1779523171362.png";
 import yIntersectionIcon from "@assets/y-intersection_(1)_1779523210044.png";
 import waterTankIcon from "@assets/water-tank_(2)_1779523360829.png";
 import windIcon from "@assets/wind_1779523398812.png";
-import turbineImgIcon from "@assets/turbine_1779523517554.png";
 import networkIcon from "@assets/network_1779525899254.png";
 import tabletIcon from "@assets/tablet_1779526000997.png";
 import chartIcon from "@assets/chart_1779526062244.png";
@@ -462,8 +461,6 @@ interface HeaderProps {
   onShowDiagram?: () => void;
   onVisualization?: () => void;
   on3DVisualization?: () => void;
-  activeLinkTool?: 'turbine' | null;
-  onSetLinkTool?: (tool: 'turbine' | null) => void;
   onShowFilePreview?: (content: string, fileName: string, type: 'inp' | 'out') => void;
   onLoadProject?: (project: any) => void;
   currentProjectId?: string | null;
@@ -484,8 +481,6 @@ export function Header({
   onShowDiagram,
   onVisualization,
   on3DVisualization,
-  activeLinkTool,
-  onSetLinkTool,
   onShowFilePreview,
   onLoadProject,
   currentProjectId,
@@ -560,7 +555,6 @@ export function Header({
     stageCount: number;
     tmax: number | null;
     pcharCount: number;
-    tcharCount: number;
     parsed: any;
   } | null>(null);
   const [inpParseError, setInpParseError] = useState<string | null>(null);
@@ -601,7 +595,6 @@ export function Header({
         stageCount: stages.length,
         tmax,
         pcharCount: Object.keys(result.pcharData || {}).length,
-        tcharCount: Object.keys(result.tcharData || {}).length,
         parsed: result,
       });
     } catch (err: any) {
@@ -624,8 +617,6 @@ export function Header({
       parsed.pcharData,
       undefined,
       parsed.nodeSelectionSet,
-      parsed.tcharData,
-      parsed.vSchedules,
       parsed.unit,
     );
     // Auto-arrange immediately after loading — store is synchronous so positions
@@ -697,19 +688,11 @@ export function Header({
         }
       });
     } else if (selectedGroupType === "elements") {
-      const specialNodes = nodes.filter(n => ["surgeTank","turbine"].includes(n.data?.type || n.type || ""));
+      const specialNodes = nodes.filter(n => ["surgeTank"].includes(n.data?.type || n.type || ""));
       specialNodes.forEach(node => {
         const exists = outputRequests.some(r => r.elementId === node.id && r.requestType === "HISTORY" && r.isElement === true);
         if (!exists) {
           addOutputRequest({ elementId: node.id, elementType: "node", requestType: "HISTORY", isElement: true, variables: selectedVars });
-          added++;
-        }
-      });
-      const turbineEdges = Array.from(new Map(edges.filter(e => e.data?.type === "turbine").map(e => [e.data?.label || e.id, e])).values());
-      turbineEdges.forEach(edge => {
-        const exists = outputRequests.some(r => r.elementId === edge.id && r.requestType === "HISTORY");
-        if (!exists) {
-          addOutputRequest({ elementId: edge.id, elementType: "edge", requestType: "HISTORY", isElement: true, variables: selectedVars });
           added++;
         }
       });
@@ -745,12 +728,7 @@ export function Header({
   const selectedActualId = selectedElementId.includes(':') ? selectedElementId.split(':')[1] : selectedElementId;
   const selectedNode = nodes.find(n => n.id === selectedActualId);
   const selectedEdge = edges.find(e => e.id === selectedActualId);
-  const isTurbineSelected =
-    (selectedNode && (selectedNode.type === 'turbine' || selectedNode.data?.type === 'turbine')) ||
-    (selectedEdge && selectedEdge.data?.type === 'turbine');
-  const availableVars = isTurbineSelected
-    ? ["Q", "HEAD", "SPEED", "POWER"]
-    : ["Q", "HEAD", "ELEV", "VEL", "PRESS", "PIEZHEAD"];
+  const availableVars = ["Q", "HEAD", "ELEV", "VEL", "PRESS", "PIEZHEAD"];
 
   const handleGenerateOutDirectly = async (fileName?: string) => {
     try {
@@ -981,14 +959,6 @@ export function Header({
           <InlineRibbonBtn imgSrc={yIntersectionIcon} label="Junction" onClick={() => { if (!isProjectOpen) onActivate?.(); addNode("junction", getViewportCenter()); }} />
           <InlineRibbonBtn imgSrc={waterTankIcon} label="Surge Tank" onClick={() => { if (!isProjectOpen) onActivate?.(); addNode("surgeTank", getViewportCenter()); }} />
           <InlineRibbonBtn imgSrc={windIcon} label="Flow BC" onClick={() => { if (!isProjectOpen) onActivate?.(); addNode("flowBoundary", getViewportCenter()); }} />
-          <SplitInlineRibbonBtn
-            imgSrc={turbineImgIcon}
-            label="Turbine"
-            active={activeLinkTool === 'turbine'}
-            data-testid="ribbon-btn-turbine"
-            onConnectorClick={() => { if (!isProjectOpen) onActivate?.(); onSetLinkTool?.(activeLinkTool === 'turbine' ? null : 'turbine'); }}
-            onElementClick={() => { if (!isProjectOpen) onActivate?.(); onSetLinkTool?.(null); addNode('turbine', getViewportCenter()); }}
-          />
         </RibbonGroup>
 
         <RibbonGroup label="Tools" flex={4} disabled={!isProjectOpen}>
@@ -1396,18 +1366,11 @@ export function Header({
                       <SelectContent>
                         <SelectItem value="_" disabled>— Elements —</SelectItem>
                         {nodes
-                          .filter((n) => n.data.type === "surgeTank" || n.data.type === "turbine" || n.type === "surgeTank" || n.type === "turbine")
+                          .filter((n) => n.data.type === "surgeTank" || n.type === "surgeTank")
                           .filter((n) => !outputRequests.some((req) => req.elementId === n.id && req.requestType === requestType && req.isElement))
                           .map((n) => (
                             <SelectItem key={`element-${n.id}`} value={`element:${n.id}`}>{n.data.label}</SelectItem>
                           ))}
-                        {Array.from(new Map(
-                          edges.filter((e) => e.data?.type === "turbine")
-                            .filter((e) => !outputRequests.some((req) => req.elementId === e.id && req.requestType === requestType))
-                            .map(e => [e.data?.label || `Edge ${e.id}`, e])
-                        ).entries()).map(([label, e]) => (
-                          <SelectItem key={`turbine-edge-${e.id}`} value={e.id}>{label}</SelectItem>
-                        ))}
                         <SelectItem value="__" disabled>— Nodes —</SelectItem>
                         {nodes
                           .filter((n) => n.data.type !== "pump" && n.data.type !== "checkValve" && n.type !== "pump" && n.type !== "checkValve")
@@ -1486,9 +1449,7 @@ export function Header({
                       className="text-[10px] text-slate-400 mb-2 leading-snug"
                       style={{ fontFamily: 'Poppins, sans-serif' }}
                     >
-                      {isTurbineSelected
-                        ? 'Turbine element: Q, HEAD, SPEED, POWER available'
-                        : 'Select which output variables to record for this element'}
+                      Select which output variables to record for this element
                     </p>
                     <div className="flex flex-wrap gap-x-4 gap-y-2">
                       {availableVars.map((v) => (
@@ -1767,7 +1728,6 @@ export function Header({
                 const EDGE_LABELS: Record<string, string> = {
                   conduit: 'Conduit',
                   dummy: 'Dummy Pipe',
-                  turbine: 'Turbine',
                   pump: 'Legacy element',
                   checkValve: 'Legacy element',
                 };
@@ -1822,18 +1782,12 @@ export function Header({
                       </div>
 
                       {/* Hydraulic data & simulation */}
-                      {(inpPreview.tcharCount > 0 || inpPreview.stageCount > 0) && (
+                      {inpPreview.stageCount > 0 && (
                         <div>
                           <div className="flex items-center justify-between mb-1">
                             <span className="text-[10px] font-bold uppercase tracking-wide text-slate-400">Hydraulic Data</span>
                           </div>
                           <div className="bg-white border border-slate-200 rounded-md divide-y divide-slate-100">
-                            {inpPreview.tcharCount > 0 && (
-                              <div className="flex items-center justify-between px-3 py-1.5">
-                                <span className="text-[11px] text-slate-600">Turbine curve types</span>
-                                <span className="text-[11px] font-semibold text-slate-800">{inpPreview.tcharCount}</span>
-                              </div>
-                            )}
                             {inpPreview.stageCount > 0 && (
                               <div className="flex items-center justify-between px-3 py-1.5">
                                 <span className="text-[11px] text-slate-600">Simulation stages</span>

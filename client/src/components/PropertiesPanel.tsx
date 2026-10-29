@@ -1,9 +1,8 @@
 import { useState, useEffect, useRef, type ComponentProps } from 'react';
-import { useNetworkStore, type UnitSystem, type PcharType, type TcharType } from '@/lib/store';
+import { useNetworkStore, type UnitSystem, type PcharType } from '@/lib/store';
 import { PropSection, PropRow } from '@/components/ui/prop-section';
 import { PIPE_MATERIALS, PIPE_MATERIALS_BY_ID } from '@/lib/pipe-materials';
 import { CONDUIT_SHAPE_OPTIONS, CROSS_SECTION_SHAPES, calculateEquivalentDiameter } from '@/lib/cross-section-shapes';
-import { TurbineCurvePanel } from '@/components/TurbineCurvePanel';
 import { PumpCurvePanel } from '@/components/PumpCurvePanel';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
@@ -89,41 +88,6 @@ function NumericInput({ value, onValueChange, ...props }: NumericInputProps) {
         if (v === '' || v === '-' || /^-?\d*\.?\d*$/.test(v)) {
           onValueChange(v);
         }
-      }}
-    />
-  );
-}
-
-function VScheduleInput({ value, onChange }: { value: number; onChange: (v: number) => void }) {
-  const [raw, setRaw] = useState(() => String(value));
-  const skipNextSync = useRef(false);
-
-  useEffect(() => {
-    if (skipNextSync.current) {
-      skipNextSync.current = false;
-      return;
-    }
-    setRaw(String(value));
-  }, [value]);
-
-  return (
-    <input
-      className="w-16 min-w-0 h-6 px-1.5 text-[10px] border rounded"
-      type="text"
-      inputMode="decimal"
-      value={raw}
-      onChange={e => {
-        const v = e.target.value;
-        if (v === '' || v === '-' || /^-?\d*\.?\d*$/.test(v)) {
-          setRaw(v);
-        }
-      }}
-      onBlur={() => {
-        const parsed = parseFloat(raw);
-        const final = isNaN(parsed) ? 0 : parsed;
-        if (raw === '' || raw === '-') setRaw('0');
-        skipNextSync.current = true;
-        onChange(final);
       }}
     />
   );
@@ -228,88 +192,6 @@ function PcharEditor({ pType, activePc, updatePcharData }: {
   );
 }
 
-function TcharEditor({ tType, activeTc, updateTcharData }: {
-  tType: number;
-  activeTc: TcharType;
-  updateTcharData: (turbineType: number, data: TcharType) => void;
-}) {
-  const arrToText = (arr: number[]) => arr.join(' ');
-  const matToText = (m: number[][]) => m.map(r => r.join(' ')).join('\n');
-  const textToArr = (text: string): number[] =>
-    text.trim().split(/[\s,\n]+/).map(parseFloat).filter(n => !isNaN(n));
-  const textToMat = (text: string): number[][] =>
-    text.trim().split('\n').map(row => row.trim().split(/\s+/).map(parseFloat).filter(n => !isNaN(n))).filter(r => r.length > 0);
-
-  const [show, setShow] = useState(false);
-  const [gateText, setGateText] = useState(() => arrToText(activeTc.gate));
-  const [headText, setHeadText] = useState(() => arrToText(activeTc.head));
-  const [qText, setQText] = useState(() => matToText(activeTc.qMatrix));
-  const [effText, setEffText] = useState(() => matToText(activeTc.effMatrix));
-
-  useEffect(() => {
-    setGateText(arrToText(activeTc.gate));
-    setHeadText(arrToText(activeTc.head));
-    setQText(matToText(activeTc.qMatrix));
-    setEffText(matToText(activeTc.effMatrix));
-  }, [tType, activeTc]);
-
-  const save = (updates: Partial<TcharType>) => updateTcharData(tType, { ...activeTc, ...updates });
-
-  return (
-    <div className="border rounded-md overflow-hidden">
-      <button
-        className="w-full flex items-center justify-between px-3 py-2 text-xs font-semibold bg-teal-50 hover:bg-teal-100 transition-colors text-teal-800"
-        onClick={() => setShow(v => !v)}
-        data-testid="btn-toggle-tchar"
-        type="button"
-      >
-        <span>Turbine Characteristics (TCHAR TYPE {tType})</span>
-        {show ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
-      </button>
-      {show && (
-        <div className="p-3 space-y-3 bg-white">
-          <p className="text-[10px] text-muted-foreground italic">
-            TCHAR TYPE {tType} data is global — shared across all turbines of this type.
-          </p>
-          <div className="grid gap-1">
-            <Label className="text-[10px] font-medium">GATE (wicket-gate position, percent of full opening, space-separated)</Label>
-            <textarea data-testid="textarea-gate"
-              className="w-full border rounded text-[10px] font-mono p-1.5 resize-none h-10 focus:outline-none focus:ring-1 focus:ring-teal-400"
-              value={gateText}
-              onChange={e => setGateText(e.target.value)}
-              onBlur={e => save({ gate: textToArr(e.target.value) })} />
-          </div>
-          <div className="grid gap-1">
-            <Label className="text-[10px] font-medium">HEAD (head values, space-separated)</Label>
-            <textarea data-testid="textarea-head"
-              className="w-full border rounded text-[10px] font-mono p-1.5 resize-none h-10 focus:outline-none focus:ring-1 focus:ring-teal-400"
-              value={headText}
-              onChange={e => setHeadText(e.target.value)}
-              onBlur={e => save({ head: textToArr(e.target.value) })} />
-          </div>
-          <div className="grid gap-1">
-            <Label className="text-[10px] font-medium">Q (one row per gate value)</Label>
-            <textarea data-testid="textarea-qmatrix"
-              className="w-full border rounded text-[10px] font-mono p-1.5 resize-none h-24 focus:outline-none focus:ring-1 focus:ring-teal-400"
-              value={qText}
-              onChange={e => setQText(e.target.value)}
-              onBlur={e => save({ qMatrix: textToMat(e.target.value) })} />
-          </div>
-          <div className="grid gap-1">
-            <Label className="text-[10px] font-medium">EFFICIENCY (one row per gate value)</Label>
-            <textarea data-testid="textarea-efficiency"
-              className="w-full border rounded text-[10px] font-mono p-1.5 resize-none h-24 focus:outline-none focus:ring-1 focus:ring-teal-400"
-              value={effText}
-              onChange={e => setEffText(e.target.value)}
-              onBlur={e => save({ effMatrix: textToMat(e.target.value) })} />
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
-
-
 export function PropertiesPanel() {
 
   const { 
@@ -328,13 +210,6 @@ export function PropertiesPanel() {
     updatePcharData,
     addPcharType,
     deletePcharType,
-    tcharData,
-    updateTcharData,
-    addTcharType,
-    deleteTcharType,
-    vSchedules,
-    updateVSchedule,
-    addVSchedule,
     qSchedules,
     updateQSchedule,
     applyMaterialToAllConduits,
@@ -439,7 +314,7 @@ export function PropertiesPanel() {
         return;
       }
 
-      const elementTypes = new Set(['pump', 'checkValve', 'turbine']);
+      const elementTypes = new Set(['pump', 'checkValve']);
 
       // Block save if new nodeNumber violates ascending order for non-element nodes
       if (thisNode && !elementTypes.has(thisNode.type!)) {
@@ -986,7 +861,6 @@ export function PropertiesPanel() {
       conduit: 'Conduit',
       pump: 'Legacy element',
       checkValve: 'Legacy element',
-      turbine: 'Turbine',
     };
     return map[t] || t.charAt(0).toUpperCase() + t.slice(1);
   })();
@@ -1206,31 +1080,6 @@ export function PropertiesPanel() {
               This imported element is retained for file compatibility and is read-only.
             </p>
           </PropSection>
-        ) : (element.data?.type === 'turbine') ? (
-          /* HAMMER-style General block for turbine */
-          <PropSection title="General">
-            <PropRow label="Label / ID">
-              <Input
-                id="label"
-                data-testid="input-label"
-                value={formData.label ?? ''}
-                onChange={(e) => handleChange('label', e.target.value)}
-                className="h-7 text-[12px] font-medium text-black border-slate-300"
-                style={{ fontFamily: 'Poppins, sans-serif' }}
-              />
-              <DuplicateLabelWarning label={formData.label as string} nodes={nodes} edges={edges} selectedId={selectedElementId} elementTypes={['turbine']} />
-            </PropRow>
-            <PropRow label="Comment" noBorder>
-              <Input
-                id="comment"
-                placeholder="Internal comment (c/C style)"
-                value={formData.comment ?? ''}
-                onChange={(e) => handleChange('comment', e.target.value)}
-                className="h-7 text-[12px] font-medium text-black border-slate-300"
-                style={{ fontFamily: 'Poppins, sans-serif' }}
-              />
-            </PropRow>
-          </PropSection>
         ) : (
           /* Legacy General block for any remaining types */
           <div className="space-y-4">
@@ -1269,7 +1118,6 @@ export function PropertiesPanel() {
           !(isNode && element.data?.type === 'flowBoundary') &&
           element.data?.type !== 'pump' &&
           element.data?.type !== 'checkValve' &&
-          element.data?.type !== 'turbine' &&
           <Separator />}
 
         {/* Specific Properties based on Type */}
@@ -1281,7 +1129,6 @@ export function PropertiesPanel() {
             !(isNode && element.data?.type === 'flowBoundary') &&
             element.data?.type !== 'pump' &&
             element.data?.type !== 'checkValve' &&
-            element.data?.type !== 'turbine' &&
             <h4 className="text-sm font-semibold text-black" style={{ fontFamily: 'Poppins, sans-serif' }}>Parameters</h4>}
 
           {isNode && (element.data?.type === 'node' || element.data?.type === 'junction' || element.data?.type === 'reservoir' || element.data?.type === 'surgeTank' || element.data?.type === 'flowBoundary' || formData.type_st) && (
@@ -1860,241 +1707,6 @@ export function PropertiesPanel() {
 
                 <PcharEditor pType={pType} activePc={activePc} updatePcharData={updatePcharData} />
                 <PumpCurvePanel pType={pType} activePc={activePc} updatePcharData={updatePcharData} />
-              </>
-            );
-          })()}
-
-          {element.data?.type === 'turbine' && (() => {
-            const tType = Number(formData.turbineType ?? 1);
-            const activeTc: TcharType = tcharData[tType] || { gate: [], head: [], qMatrix: [], effMatrix: [] };
-            const tcharTypeOptions = Object.keys(tcharData).map(Number).sort((a, b) => a - b)
-              .map(t => ({ label: `TYPE ${t}`, value: String(t) }));
-            const storedMode = String(formData.operationMode || 'OFF').toUpperCase();
-            const opMode = storedMode === 'TURBGOV' ? 'GOVERN'
-              : storedMode === 'EMERGENCY' ? 'REJECT'
-              : storedMode === 'TURBINE' ? 'OFF'
-              : storedMode;
-            return (
-              <>
-                {/* ── TURBINE: TCHAR Configuration ── */}
-                <PropSection
-                  title="TCHAR Configuration"
-                  headerExtra={
-                    <div className="flex gap-1">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="h-5 text-[10px] px-1.5"
-                        onClick={() => {
-                          const nums = Object.keys(tcharData).map(Number);
-                          const next = nums.length > 0 ? Math.max(...nums) + 1 : 1;
-                          addTcharType(next);
-                        }}
-                      >
-                        + TCHAR
-                      </Button>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="h-5 text-[10px] px-1.5 text-destructive border-destructive/40 hover:bg-destructive/10"
-                        disabled={tcharTypeOptions.length <= 1}
-                        onClick={() => {
-                          const nums = Object.keys(tcharData).map(Number).sort((a, b) => a - b);
-                          if (nums.length <= 1) return;
-                          deleteTcharType(tType);
-                          const remaining = nums.filter(n => n !== tType);
-                          if (remaining.length > 0) handleLocalChange('turbineType', remaining[0]);
-                        }}
-                      >
-                        <Trash2 className="h-3 w-3 mr-0.5" /> Del
-                      </Button>
-                    </div>
-                  }
-                >
-                  <PropRow label="TCHAR Type" noBorder>
-                    <Select
-                      value={String(tType)}
-                      onValueChange={v => handleLocalChange('turbineType', Number(v))}
-                    >
-                      <SelectTrigger id="turbineType" className="h-7 text-[12px] font-medium text-black border-slate-300" style={{ fontFamily: 'Poppins, sans-serif' }}>
-                        <SelectValue placeholder="Select type" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {(tcharTypeOptions.length > 0 ? tcharTypeOptions : [{ label: 'TYPE 1', value: '1' }]).map(opt => (
-                          <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </PropRow>
-                </PropSection>
-
-                {/* ── TURBINE: Parameters ── */}
-                <PropSection title="Parameters">
-                  <PropRow label="Sync Speed SYNCSPD (RPM)">
-                    <NumericInput id="syncSpeed" data-testid="input-syncspeed"
-                      value={formData.syncSpeed}
-                      onValueChange={v => handleLocalChange('syncSpeed', v)}
-                      className="h-7 text-[12px] font-medium text-black border-slate-300"
-                      style={{ fontFamily: 'Poppins, sans-serif' } as any}
-                    />
-                  </PropRow>
-                  <PropRow label="WR² — Moment of Inertia">
-                    <NumericInput id="turb-wr2" data-testid="input-turb-wr2"
-                      value={formData.wr2}
-                      onValueChange={v => handleLocalChange('wr2', v)}
-                      className="h-7 text-[12px] font-medium text-black border-slate-300"
-                      style={{ fontFamily: 'Poppins, sans-serif' } as any}
-                    />
-                  </PropRow>
-                  <PropRow label={`Diameter (${currentUnit === 'SI' ? 'm' : 'ft'})`}>
-                    <NumericInput id="turbineDiameter" data-testid="input-turbine-diameter"
-                      value={formData.turbineDiameter}
-                      onValueChange={v => handleLocalChange('turbineDiameter', v)}
-                      className="h-7 text-[12px] font-medium text-black border-slate-300"
-                      style={{ fontFamily: 'Poppins, sans-serif' } as any}
-                    />
-                  </PropRow>
-                  <PropRow label="Friction">
-                    <NumericInput id="turbFriction" data-testid="input-turbfriction"
-                      value={formData.turbFriction}
-                      onValueChange={v => handleLocalChange('turbFriction', v)}
-                      className="h-7 text-[12px] font-medium text-black border-slate-300"
-                      style={{ fontFamily: 'Poppins, sans-serif' } as any}
-                    />
-                  </PropRow>
-                  <PropRow label="Windage" noBorder>
-                    <NumericInput id="windage" data-testid="input-windage"
-                      value={formData.windage}
-                      onValueChange={v => handleLocalChange('windage', v)}
-                      className="h-7 text-[12px] font-medium text-black border-slate-300"
-                      style={{ fontFamily: 'Poppins, sans-serif' } as any}
-                    />
-                  </PropRow>
-                </PropSection>
-
-                {/* ── TURBINE: Operation Mode ── */}
-                <PropSection title="Operation Mode">
-                  <PropRow label="Mode (OPTURB)" noBorder>
-                    <Select value={opMode === 'GOVERN' ? '' : opMode} onValueChange={v => handleLocalChange('operationMode', v)}>
-                      <SelectTrigger id="operationMode" className="h-7 text-[12px] font-medium text-black border-slate-300" style={{ fontFamily: 'Poppins, sans-serif' }}>
-                        <SelectValue placeholder={opMode === 'GOVERN' ? 'Legacy mode (imported)' : 'Mode'} />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="GENERATE">GENERATE</SelectItem>
-                        <SelectItem value="OFF">OFF</SelectItem>
-                        <SelectItem value="REJECT">REJECT</SelectItem>
-                        <SelectItem value="STARTUP">STARTUP</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </PropRow>
-                </PropSection>
-
-                {opMode === 'GOVERN' && (
-                  <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-[11px] leading-relaxed text-slate-600">
-                    This imported turbine uses a legacy mode. Its original input data is preserved. Choose a current mode above to replace it.
-                  </div>
-                )}
-
-                {opMode === 'REJECT' && (
-                  <PropSection title="Load Rejection">
-                    <PropRow label="Rejection time TOFF (s)">
-                      <NumericInput id="turbine-toff" data-testid="input-turbine-toff"
-                        value={formData.turbineToff ?? 2}
-                        onValueChange={v => handleLocalChange('turbineToff', v)}
-                        className="h-7 text-[12px] font-medium text-black border-slate-300"
-                        style={{ fontFamily: 'Poppins, sans-serif' } as any}
-                      />
-                    </PropRow>
-                  </PropSection>
-                )}
-
-                {/* ── TURBINE: VSCHEDULE (GENERATE / REJECT / STARTUP) ── */}
-                {(opMode === 'GENERATE' || opMode === 'REJECT' || opMode === 'STARTUP') && (
-                  <PropSection title="VSCHEDULE">
-                    <PropRow label="Schedule Number">
-                      <NumericInput id="vScheduleNumber" data-testid="input-vschednum"
-                        value={formData.vScheduleNumber}
-                        onValueChange={v => handleLocalChange('vScheduleNumber', v)}
-                        className="h-7 text-[12px] font-medium text-black border-slate-300"
-                        style={{ fontFamily: 'Poppins, sans-serif' } as any}
-                      />
-                    </PropRow>
-                    {(() => {
-                      const schedNum = Number(formData.vScheduleNumber ?? 1);
-                      const pts: { t: number; g: number }[] = vSchedules[schedNum] || [];
-                      return (
-                        <div className="px-0 pb-2">
-                          {/* Sub-header with T/G label and Add button */}
-                          <div className="flex items-center justify-between px-3 py-1.5 border-t border-slate-200 bg-[#f4f7fc]">
-                            <span className="text-[10px] font-semibold text-[#3a4a6b] uppercase tracking-wide" style={{ fontFamily: 'Poppins, sans-serif' }}>
-                              VSCHEDULE {schedNum} — T / G pairs
-                            </span>
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              className="h-5 text-[10px] px-1.5"
-                              style={{ fontFamily: 'Poppins, sans-serif' }}
-                              onClick={() => {
-                                if (!vSchedules[schedNum]) addVSchedule(schedNum);
-                                updateVSchedule(schedNum, [...pts, { t: 0, g: 1.0 }]);
-                              }}
-                            >
-                              + Pair
-                            </Button>
-                          </div>
-                          {/* Column headers */}
-                          {pts.length > 0 && (
-                            <div className="flex items-center gap-2 px-3 pt-1">
-                              <span className="flex-1 text-[10px] font-semibold text-slate-500 uppercase tracking-wide">Time (T)</span>
-                              <span className="flex-1 text-[10px] font-semibold text-slate-500 uppercase tracking-wide">Gate G (%)</span>
-                              <span className="w-5" />
-                            </div>
-                          )}
-                          <div className="px-3 pt-1 space-y-1">
-                            {pts.length === 0 && (
-                              <p className="text-[10px] text-muted-foreground italic text-center py-2">No T/G pairs. Add one above.</p>
-                            )}
-                            {pts.map((pt, idx) => (
-                              <div key={idx} className="flex items-center gap-2 group p-1 rounded border border-slate-200 bg-white">
-                                <VScheduleInput
-                                  value={pt.t}
-                                  onChange={v => {
-                                    const np = [...pts];
-                                    np[idx] = { ...np[idx], t: v };
-                                    updateVSchedule(schedNum, np);
-                                  }}
-                                />
-                                <VScheduleInput
-                                  value={pt.g}
-                                  onChange={v => {
-                                    const np = [...pts];
-                                    np[idx] = { ...np[idx], g: v };
-                                    updateVSchedule(schedNum, np);
-                                  }}
-                                />
-                                <button
-                                  className="text-destructive hover:text-red-700 opacity-0 group-hover:opacity-100 transition-opacity"
-                                  onClick={() => updateVSchedule(schedNum, pts.filter((_, i) => i !== idx))}
-                                >
-                                  <Trash2 className="h-3 w-3" />
-                                </button>
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      );
-                    })()}
-                  </PropSection>
-                )}
-
-                <TcharEditor tType={tType} activeTc={activeTc} updateTcharData={updateTcharData} />
-
-                <TurbineCurvePanel
-                  tType={tType}
-                  activeTc={activeTc}
-                  updateTcharData={updateTcharData}
-                  designHead={typeof formData.designHead === 'number' ? formData.designHead : undefined}
-                />
               </>
             );
           })()}

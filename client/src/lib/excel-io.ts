@@ -6,7 +6,7 @@ import { PIPE_MATERIALS, PIPE_MATERIALS_BY_ID } from './pipe-materials';
 
 export type FilterKey =
   | 'all' | 'conduit' | 'dummy'
-  | 'node' | 'reservoir' | 'junction' | 'surgeTank' | 'flowBoundary' | 'pump' | 'checkValve' | 'turbine';
+  | 'node' | 'reservoir' | 'junction' | 'surgeTank' | 'flowBoundary' | 'pump' | 'checkValve';
 
 type ColType = 'text' | 'number' | 'boolean' | 'dropdown';
 
@@ -37,7 +37,6 @@ const BC_MODE_OPTIONS = ['Fixed Elevation', 'H Schedule'];
 const SURGE_TANK_TYPE_OPTIONS = ['SIMPLE', 'DIFFERENTIAL', 'AIRTANK'];
 const PUMP_STATUS_OPTIONS = ['ACTIVE', 'INACTIVE'];
 const VALVE_STATUS_OPTIONS = ['OPEN', 'CLOSED'];
-const TURBINE_MODE_OPTIONS = ['GENERATE', 'OFF', 'REJECT', 'STARTUP'];
 const BOOL_OPTIONS = ['true', 'false'];
 
 export const PIPE_MATERIAL_OPTIONS = PIPE_MATERIALS.map(material => material.label);
@@ -188,26 +187,6 @@ export const TAB_COLS: Record<FilterKey, ColDef[]> = {
     { key: 'valveDiam',   header: 'Valve Diameter',  type: 'number', width: 16 },
     { key: 'comment',     header: 'Comment',         type: 'text', width: 24 },
   ],
-  turbine: [
-    ROW_NUM_COL,
-    { key: '_unit',           header: 'Unit (SI/FPS)',     type: 'dropdown', options: UNIT_OPTIONS, width: 14 },
-    { key: 'label',           header: 'Label',             type: 'text', width: 16 },
-    { key: 'nodeNumber',      header: 'Node #',             type: 'number', width: 10 },
-    { key: 'elevation',       header: 'Elevation',          type: 'number', width: 14 },
-    { key: 'turbineType',     header: 'TCHAR Type #',       type: 'number', width: 14 },
-    { key: 'syncSpeed',       header: 'Sync Speed (RPM)',   type: 'number', width: 18 },
-    { key: 'turbineDiameter', header: 'Diameter',           type: 'number', width: 14 },
-    { key: 'wr2',             header: 'WR2',                type: 'number', width: 12 },
-    { key: 'turbFriction',    header: 'Friction',           type: 'number', width: 14 },
-    { key: 'windage',         header: 'Windage',            type: 'number', width: 12 },
-    { key: 'operationMode',   header: 'Mode',               type: 'dropdown', options: TURBINE_MODE_OPTIONS, width: 16 },
-    { key: 'vScheduleNumber', header: 'V Sched #',          type: 'number', width: 12 },
-    { key: 'turbineToff',     header: 'Reject TOFF (s)',    type: 'number', width: 15 },
-    { key: 'governorTW',      header: 'Governor TW (s)',    type: 'number', width: 16 },
-    { key: 'loadScheduleNumber', header: 'Load Sched #',     type: 'number', width: 14 },
-    { key: 'governorLoadHP',  header: 'Generator Load (HP)', type: 'number', width: 20 },
-    { key: 'comment',         header: 'Comment',            type: 'text', width: 24 },
-  ],
 };
 
 // ─── Material helpers ─────────────────────────────────────────────────────────
@@ -271,7 +250,7 @@ function getRowValue(
     const LABELS: Record<string, string> = {
       reservoir: 'Reservoir', node: 'Node', junction: 'Junction',
       surgeTank: 'Surge Tank', flowBoundary: 'Flow BC',
-      pump: 'Pump', checkValve: 'Check Valve', turbine: 'Turbine',
+      pump: 'Pump', checkValve: 'Check Valve',
       conduit: 'Conduit', dummy: 'Dummy Pipe',
     };
     return LABELS[subType] ?? subType;
@@ -294,13 +273,6 @@ function getRowValue(
   const isConduitSub = subType === 'conduit';
   const isSurgeSub   = subType === 'surgeTank';
   const isFlowSub    = subType === 'flowBoundary';
-  const isTurbineSub = subType === 'turbine';
-  const storedTurbineMode = String(data.operationMode || 'OFF').toUpperCase();
-  const turbineMode = storedTurbineMode === 'TURBGOV' ? 'GOVERN'
-    : storedTurbineMode === 'EMERGENCY' ? 'REJECT'
-    : storedTurbineMode === 'TURBINE' ? 'OFF'
-    : storedTurbineMode;
-  if (col.key === 'operationMode' && isTurbineSub) return turbineMode === 'GOVERN' ? 'Legacy mode (imported)' : turbineMode;
 
   // ── NA: pipe-specific columns that don't apply to node rows ("all" tab) ────
   // Pipe Type — only meaningful for edges
@@ -321,15 +293,6 @@ function getRowValue(
   // ── NA: Manning's n, pipeE, pipeWT — conduit only ─────────────────────────
   if ((col.key === 'manningsN' || col.key === 'pipeE' || col.key === 'pipeWT') && !isConduitSub) return 'NA';
 
-  // ── NA: turbine V-schedule number — only needed for GENERATE/REJECT/STARTUP ──
-  if (col.key === 'vScheduleNumber' && isTurbineSub) {
-    if (turbineMode !== 'GENERATE' && turbineMode !== 'REJECT' && turbineMode !== 'STARTUP') return 'NA';
-  }
-  if (col.key === 'turbineToff' && isTurbineSub && turbineMode !== 'REJECT') return 'NA';
-  if (
-    (col.key === 'governorTW' || col.key === 'loadScheduleNumber' || col.key === 'governorLoadHP') &&
-    isTurbineSub && turbineMode !== 'GOVERN'
-  ) return 'NA';
 
   // BC Mode: translate stored 'fixed'/'schedule' → display label for Excel dropdown
   if (col.key === 'mode') return modeToDisplay(data.mode);
@@ -886,7 +849,6 @@ const ALL_SHEET_TYPES: Array<{ filter: FilterKey; label: string }> = [
   { filter: 'dummy',        label: 'Dummy Pipe'  },
   { filter: 'surgeTank',    label: 'Surge Tank'  },
   { filter: 'flowBoundary', label: 'Flow BC'     },
-  { filter: 'turbine',      label: 'Turbine'     },
 ];
 
 // Map sheet label → FilterKey for import
@@ -1028,14 +990,6 @@ function _parseExcelDataRow(
 
     if (col.key === 'mode') {
       update.mode = displayToMode(strVal);
-      return;
-    }
-
-    if (col.key === 'operationMode' && existingRow.subType === 'turbine') {
-      const normalizedMode = strVal.toUpperCase();
-      update.operationMode = normalizedMode === 'LEGACY MODE (IMPORTED)' || normalizedMode === 'TURBGOV'
-        ? 'GOVERN'
-        : normalizedMode;
       return;
     }
 

@@ -176,7 +176,6 @@ interface NetworkState {
   applyMaterialToAllConduits: boolean;
   nodeSelectionSet: Set<string>;
   pcharData: Record<number, PcharType>;
-  vSchedules: Record<number, { t: number; g: number }[]>;
   nodeOrderErrorIds: string[];
   history: {
     past: Partial<NetworkState>[];
@@ -193,12 +192,9 @@ interface NetworkState {
   updateEdgeData: (id: string, data: Partial<EdgeData>) => void;
   deleteElement: (id: string, type: 'node' | 'edge') => void;
   selectElement: (id: string | null, type: 'node' | 'edge' | null) => void;
-  loadNetwork: (nodes: WhamoNode[], edges: WhamoEdge[], params?: ComputationalParameters, requests?: OutputRequest[], projectName?: string, fileHandle?: FileSystemFileHandle, pcharData?: Record<number, PcharType>, snapshotTimes?: number[], nodeSelectionSet?: string[], vSchedules?: Record<number, { t: number; g: number }[]>, unit?: UnitSystem) => void;
+  loadNetwork: (nodes: WhamoNode[], edges: WhamoEdge[], params?: ComputationalParameters, requests?: OutputRequest[], projectName?: string, fileHandle?: FileSystemFileHandle, pcharData?: Record<number, PcharType>, snapshotTimes?: number[], nodeSelectionSet?: string[], unit?: UnitSystem) => void;
   clearNetwork: () => void;
   updatePcharData: (pumpType: number, data: PcharType) => void;
-  updateVSchedule: (schedNum: number, points: { t: number; g: number }[]) => void;
-  addVSchedule: (schedNum: number) => void;
-  deleteVSchedule: (schedNum: number) => void;
   autoArrange: () => void;
   updateComputationalParams: (params: Partial<ComputationalParameters>) => void;
   addOutputRequest: (request: Omit<OutputRequest, 'id'>) => void;
@@ -256,7 +252,6 @@ export const useNetworkStore = create<NetworkState>((set, get) => ({
   applyMaterialToAllConduits: false,
   nodeSelectionSet: new Set(),
   pcharData: {},
-  vSchedules: {},
   nodeOrderErrorIds: [],
   history: {
     past: [],
@@ -873,6 +868,8 @@ export const useNetworkStore = create<NetworkState>((set, get) => ({
         type: 'checkValve',
         valveStatus: 'OPEN',
       };
+    } else {
+      throw new Error('Unsupported element type.');
     }
 
     const strokeColor = '#000000';
@@ -1033,7 +1030,18 @@ export const useNetworkStore = create<NetworkState>((set, get) => ({
     set({ selectedElementId: id, selectedElementType: type });
   },
 
-  loadNetwork: (nodes, edges, params, requests, projectName, fileHandle, pcharData, snapshotTimes, nodeSelectionSet, vSchedules, unit?) => {
+  loadNetwork: (nodes, edges, params, requests, projectName, fileHandle, pcharData, snapshotTimes, nodeSelectionSet, unit?) => {
+    const supportedNodeTypes = new Set(['reservoir', 'node', 'junction', 'surgeTank', 'flowBoundary', 'pump', 'checkValve']);
+    const supportedLinkTypes = new Set(['conduit', 'dummy', 'pump', 'checkValve']);
+    const hasUnsupportedNode = nodes.some(node => !supportedNodeTypes.has(String(node.data?.type ?? node.type)));
+    const hasUnsupportedEdge = edges.some(edge => {
+      const linkType = edge.data?.type ?? (edge.type === 'connection' ? 'conduit' : edge.type ?? 'conduit');
+      return !supportedLinkTypes.has(String(linkType));
+    });
+    if (hasUnsupportedNode || hasUnsupportedEdge) {
+      throw new Error('This project contains element data that this version cannot open.');
+    }
+
     const maxId = Math.max(
       ...nodes.map(n => parseInt(n.id) || 0),
       ...edges.map(e => parseInt(e.id) || 0),
@@ -1140,7 +1148,6 @@ export const useNetworkStore = create<NetworkState>((set, get) => ({
       projectName: projectName || get().projectName,
       loadedFileHandle: fileHandle || null,
       pcharData: pcharData || {},
-      vSchedules: vSchedules || {},
       nodeSelectionSet: Array.isArray(nodeSelectionSet) ? new Set(nodeSelectionSet) : new Set(),
       selectedElementId: null, 
       selectedElementType: null,
@@ -1157,7 +1164,6 @@ export const useNetworkStore = create<NetworkState>((set, get) => ({
       hSchedules: [],
       qSchedules: {},
       pcharData: {},
-      vSchedules: {},
       selectedElementId: null, 
       selectedElementType: null, 
       outputRequests: [],
@@ -1171,21 +1177,6 @@ export const useNetworkStore = create<NetworkState>((set, get) => ({
   updatePcharData: (pumpType, data) => {
     const existing = get().pcharData;
     set({ pcharData: { ...existing, [pumpType]: data } });
-  },
-
-  updateVSchedule: (schedNum, points) => {
-    set({ vSchedules: { ...get().vSchedules, [schedNum]: points } });
-  },
-
-  addVSchedule: (schedNum) => {
-    if (get().vSchedules[schedNum] !== undefined) return;
-    set({ vSchedules: { ...get().vSchedules, [schedNum]: [] } });
-  },
-
-  deleteVSchedule: (schedNum) => {
-    const existing = { ...get().vSchedules };
-    delete existing[schedNum];
-    set({ vSchedules: existing });
   },
 
   updateComputationalParams: (params) => {

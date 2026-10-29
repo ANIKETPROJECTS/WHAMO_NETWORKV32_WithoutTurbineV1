@@ -34,7 +34,7 @@ import '@xyflow/react/dist/style.css';
 import { cn } from '@/lib/utils';
 import { useNetworkStore, WhamoNode, WhamoEdge } from '@/lib/store';
 import { registerScreenToFlowPosition } from '@/lib/viewport';
-import { ReservoirNode, SimpleNode, JunctionNode, SurgeTankNode, FlowBoundaryNode, PumpNode, CheckValveNode, TurbineNode } from '@/components/NetworkNode';
+import { ReservoirNode, SimpleNode, JunctionNode, SurgeTankNode, FlowBoundaryNode, PumpNode, CheckValveNode } from '@/components/NetworkNode';
 import { ConnectionEdge } from '@/components/ConnectionEdge';
 import { PropertiesPanel } from '@/components/PropertiesPanel';
 import { NodeSelectionPanel } from '@/components/NodeSelectionPanel';
@@ -92,7 +92,6 @@ const nodeTypes = {
   flowBoundary: FlowBoundaryNode,
   pump: PumpNode,
   checkValve: CheckValveNode,
-  turbine: TurbineNode,
 };
 
 const edgeTypes = {
@@ -152,19 +151,10 @@ function DesignerInner() {
     setLoadedFileHandle,
     setAllNodesSelected,
     addNode,
-    addEdgeElement,
     nodeSelectionSet,
   } = useNetworkStore();
 
-  const [activeLinkTool, setActiveLinkTool] = useState<'turbine' | null>(null);
-  const [linkSourceNodeId, setLinkSourceNodeId] = useState<string | null>(null);
-
-  // Refs always hold the latest values — used in event listeners to avoid stale closures
-  const activeLinkToolRef = useRef<'turbine' | null>(null);
-  const linkSourceNodeIdRef = useRef<string | null>(null);
   const rfContainerRef = useRef<HTMLDivElement>(null);
-  useEffect(() => { activeLinkToolRef.current = activeLinkTool; }, [activeLinkTool]);
-  useEffect(() => { linkSourceNodeIdRef.current = linkSourceNodeId; }, [linkSourceNodeId]);
 
   // Fields that live in a pipe profile (shared across same-label edges)
   const PIPE_PROFILE_FIELDS = [
@@ -222,8 +212,6 @@ function DesignerInner() {
       computationalParams: state.computationalParams,
       outputRequests: state.outputRequests,
       pcharData: state.pcharData,
-      tcharData: state.tcharData,
-      vSchedules: state.vSchedules,
       snapshotTimes: state.snapshotTimes,
       hSchedules: state.hSchedules,
       qSchedules: state.qSchedules,
@@ -313,8 +301,6 @@ function DesignerInner() {
       computationalParams: state2.computationalParams,
       outputRequests: state2.outputRequests,
       pcharData: state2.pcharData,
-      tcharData: state2.tcharData,
-      vSchedules: state2.vSchedules,
       snapshotTimes: state2.snapshotTimes,
       hSchedules: state2.hSchedules,
       qSchedules: state2.qSchedules,
@@ -516,40 +502,7 @@ function DesignerInner() {
     [isLocked, screenToFlowPosition, addNode, storeOnConnect, toast]
   );
 
-  // DOM-level capture listener: intercepts mousedown on any part of a node (body OR handle dots)
-  // Uses refs so it always reads the latest tool/source values without stale closures.
-  useEffect(() => {
-    const container = rfContainerRef.current;
-    if (!container) return;
-    const handler = (event: MouseEvent) => {
-      if (!activeLinkToolRef.current) return;
-      const nodeEl = (event.target as Element).closest('.react-flow__node');
-      if (!nodeEl) return;
-      const nodeId = nodeEl.getAttribute('data-id');
-      if (!nodeId) return;
-
-      if (!linkSourceNodeIdRef.current) {
-        linkSourceNodeIdRef.current = nodeId;
-        setLinkSourceNodeId(nodeId);
-      } else if (linkSourceNodeIdRef.current === nodeId) {
-        toast({ variant: 'destructive', title: 'Invalid Connection', description: 'Cannot connect an element to itself.' });
-      } else {
-        const tool = activeLinkToolRef.current;
-        const srcId = linkSourceNodeIdRef.current;
-        addEdgeElement(tool, srcId, nodeId);
-        linkSourceNodeIdRef.current = null;
-        activeLinkToolRef.current = null;
-        setLinkSourceNodeId(null);
-        setActiveLinkTool(null);
-      }
-    };
-    container.addEventListener('mousedown', handler, true);
-    return () => container.removeEventListener('mousedown', handler, true);
-  }, [addEdgeElement, toast]);
-
-  // Normal node click: only runs when NOT in link mode (ref guard keeps it fast)
   const onNodeClick = useCallback((_: React.MouseEvent, node: Node) => {
-    if (activeLinkToolRef.current) return;
     selectElement(node.id, 'node');
   }, [selectElement]);
 
@@ -561,7 +514,6 @@ function DesignerInner() {
   // Node selection is handled exclusively by onNodeClick so that dragging
   // a node does NOT pop the Properties panel open.
   const onSelectionChange = useCallback(({ nodes, edges }: { nodes: WhamoNode[], edges: WhamoEdge[] }) => {
-    if (activeLinkToolRef.current) return;
     if (nodes.length === 0 && edges.length === 0) {
       selectElement(null, null);
     } else if (nodes.length === 0 && edges.length > 0) {
@@ -572,11 +524,6 @@ function DesignerInner() {
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape' && activeLinkTool) {
-        setActiveLinkTool(null);
-        setLinkSourceNodeId(null);
-        return;
-      }
       // Check if user is typing in an input
       if (event.target instanceof HTMLInputElement || event.target instanceof HTMLTextAreaElement) {
         return;
@@ -640,7 +587,7 @@ function DesignerInner() {
             // Use project name from file or fallback to filename
             const loadedProjectName = json.projectName || file.name.replace(/\.json$/i, '');
             const expandedEdges = expandEdges(json.edges, json.pipeProfiles);
-            loadNetwork(json.nodes, expandedEdges, { ...json.computationalParams, qSchedules: json.qSchedules, hSchedules: json.hSchedules }, json.outputRequests, loadedProjectName, undefined, json.pcharData, json.snapshotTimes, json.nodeSelectionSet, json.tcharData, json.vSchedules);
+            loadNetwork(json.nodes, expandedEdges, { ...json.computationalParams, qSchedules: json.qSchedules, hSchedules: json.hSchedules }, json.outputRequests, loadedProjectName, undefined, json.pcharData, json.snapshotTimes, json.nodeSelectionSet);
             setProjectState("active");
             setServerProjectId(null);
             setTimeout(() => { autoArrange(); requestAnimationFrame(() => fitView()); }, 0);
@@ -649,10 +596,10 @@ function DesignerInner() {
             throw new Error("Invalid JSON format");
           }
         } else if (fileName.endsWith('.inp')) {
-          const { nodes, edges, projectName: parsedName, computationalParams: parsedParams, hSchedules: parsedHSchedules, qSchedules: parsedQSchedules, pcharData, tcharData, vSchedules, outputRequests: parsedRequests, nodeSelectionSet: parsedNodeSel } = parseInpFile(content);
+          const { nodes, edges, projectName: parsedName, computationalParams: parsedParams, hSchedules: parsedHSchedules, qSchedules: parsedQSchedules, pcharData, outputRequests: parsedRequests, nodeSelectionSet: parsedNodeSel } = parseInpFile(content);
           if (nodes.length > 0) {
             const loadedProjectName = parsedName || file.name.replace(/\.inp$/i, '');
-            loadNetwork(nodes, edges, { ...parsedParams, hSchedules: parsedHSchedules, qSchedules: parsedQSchedules }, parsedRequests, loadedProjectName, undefined, pcharData, undefined, parsedNodeSel, tcharData, vSchedules);
+            loadNetwork(nodes, edges, { ...parsedParams, hSchedules: parsedHSchedules, qSchedules: parsedQSchedules }, parsedRequests, loadedProjectName, undefined, pcharData, undefined, parsedNodeSel);
             setProjectState("active");
             setServerProjectId(null);
             toast({ title: "Project Loaded", description: `Network topology "${loadedProjectName}" restored from .inp file.` });
@@ -781,8 +728,6 @@ function DesignerInner() {
       json.pcharData,
       json.snapshotTimes,
       json.nodeSelectionSet,
-      json.tcharData,
-      json.vSchedules,
     );
     setProjectState("active");
     setServerProjectId(project.id);
@@ -838,7 +783,7 @@ function DesignerInner() {
           if (json.nodes && json.edges) {
             const name = json.projectName || file.name.replace(/\.json$/i, '');
             const expandedEdges = expandEdges(json.edges, json.pipeProfiles);
-            loadNetwork(json.nodes, expandedEdges, { ...json.computationalParams, qSchedules: json.qSchedules, hSchedules: json.hSchedules }, json.outputRequests, name, handle, json.pcharData, json.snapshotTimes, json.nodeSelectionSet, json.tcharData, json.vSchedules);
+            loadNetwork(json.nodes, expandedEdges, { ...json.computationalParams, qSchedules: json.qSchedules, hSchedules: json.hSchedules }, json.outputRequests, name, handle, json.pcharData, json.snapshotTimes, json.nodeSelectionSet);
             setProjectState("active");
             setServerProjectId(null);
             setShowProjectsList(false);
@@ -846,10 +791,10 @@ function DesignerInner() {
             toast({ title: "Project Loaded", description: `"${name}" imported from file.` });
           }
         } else if (fileName.endsWith('.inp')) {
-          const { nodes: n, edges: e, projectName: pn, computationalParams: cp, hSchedules: hs, qSchedules: qs, pcharData: pd, tcharData: td, vSchedules: vs, outputRequests: reqs, nodeSelectionSet: nodeSel } = parseInpFile(content);
+          const { nodes: n, edges: e, projectName: pn, computationalParams: cp, hSchedules: hs, qSchedules: qs, pcharData: pd, outputRequests: reqs, nodeSelectionSet: nodeSel } = parseInpFile(content);
           if (n.length > 0) {
             const name = pn || file.name.replace(/\.inp$/i, '');
-            loadNetwork(n, e, { ...cp, hSchedules: hs, qSchedules: qs }, reqs, name, handle, pd, undefined, nodeSel, td, vs);
+            loadNetwork(n, e, { ...cp, hSchedules: hs, qSchedules: qs }, reqs, name, handle, pd, undefined, nodeSel);
             setProjectState("active");
             setServerProjectId(null);
             setShowProjectsList(false);
@@ -1197,8 +1142,6 @@ function DesignerInner() {
         }}
         onVisualization={handleVisualizationClick}
         on3DVisualization={() => setShow3DVisualization(true)}
-        activeLinkTool={activeLinkTool}
-        onSetLinkTool={setActiveLinkTool}
         onShowFilePreview={(content, fileName, type) => setFilePreview({ content, fileName, type })}
         onLoadProject={handleLoadFromServer}
         currentProjectId={serverProjectId}
@@ -1288,21 +1231,7 @@ function DesignerInner() {
           <ResizablePanel defaultSize={75} minSize={isMaximized ? 0 : 30} className={cn(isMaximized && "hidden")}>
             <div className="flex h-full w-full overflow-hidden relative">
               {/* Canvas Area */}
-              <div ref={rfContainerRef} className={cn("flex-1 relative h-full bg-white transition-all duration-300", activeLinkTool && "link-mode-active")}>
-                {activeLinkTool && (
-                  <div className="absolute top-3 left-1/2 -translate-x-1/2 z-50 pointer-events-none">
-                    <div className="flex items-center gap-2 px-4 py-2 rounded-full shadow-lg text-white text-sm font-medium bg-green-700">
-                      <span>
-                        Turbine connection mode
-                      </span>
-                      <span className="opacity-80">—</span>
-                      <span>
-                        {linkSourceNodeId ? 'Now click the downstream node' : 'Click the upstream node'}
-                      </span>
-                      <span className="opacity-60 text-xs ml-1">(Esc to cancel)</span>
-                    </div>
-                  </div>
-                )}
+              <div ref={rfContainerRef} className="flex-1 relative h-full bg-white transition-all duration-300">
                 {filePreview ? (
                   /* ── Inline File Preview (replaces canvas) ── */
                   (() => {
@@ -1493,23 +1422,23 @@ function DesignerInner() {
                       edges={edges as any}
                       onNodesChange={onNodesChange}
                       onEdgesChange={onEdgesChange}
-                      onConnect={activeLinkTool ? undefined : onConnect}
-                      onConnectEnd={activeLinkTool ? undefined : onConnectEnd}
+                      onConnect={onConnect}
+                      onConnectEnd={onConnectEnd}
                       isValidConnection={isValidConnection}
                       nodeTypes={nodeTypes}
                       edgeTypes={edgeTypes}
                       onNodeClick={onNodeClick}
                       onEdgeClick={onEdgeClick}
                       onSelectionChange={onSelectionChange as any}
-                      onPaneClick={() => { setShowNodeSelection(false); if (activeLinkTool) { setActiveLinkTool(null); setLinkSourceNodeId(null); } }}
+                      onPaneClick={() => setShowNodeSelection(false)}
                       fitView
                       minZoom={0.05}
                       maxZoom={4}
-                      className={cn("bg-white", activeLinkTool && "cursor-crosshair")}
+                      className="bg-white"
                       proOptions={{ hideAttribution: true }}
-                      nodesDraggable={!isLocked && !activeLinkTool}
+                      nodesDraggable={!isLocked}
                       nodesConnectable={!isLocked}
-                      elementsSelectable={!activeLinkTool}
+                      elementsSelectable
                     >
                       <Background color="#94a3b8" gap={20} size={1} className={cn(!showGrid && "opacity-0")} />
                       <Controls className="!bg-white !shadow-xl !border-border">
@@ -1549,7 +1478,6 @@ function DesignerInner() {
                           { label: 'Flow BC',     shape: <svg width="22" height="16" viewBox="-2 -2 26 20"><rect x="0" y="0" width="22" height="16" rx="4" fill="#9C27B0" stroke="#6A1B9A" strokeWidth="2"/></svg> },
                           { label: 'Node',        shape: <svg width="16" height="16" viewBox="-2 -2 20 20"><circle cx="8" cy="8" r="8" fill="#90A4AE" stroke="#546E7A" strokeWidth="2"/></svg> },
                           { label: 'Junction',    shape: <svg width="16" height="16" viewBox="-2 -2 20 20"><circle cx="8" cy="8" r="8" fill="#F44336" stroke="#B71C1C" strokeWidth="2"/></svg> },
-                          { label: 'Turbine',     shape: <svg width="16" height="16" viewBox="-2 -2 20 20"><polygon points="8,0 16,8 8,16 0,8" fill="#16a34a" stroke="#166534" strokeWidth="2"/></svg> },
                           { label: 'Conduit',     shape: <svg width="28" height="12" viewBox="0 0 28 12"><line x1="1" y1="6" x2="22" y2="6" stroke="#555" strokeWidth="1.5"/><polygon points="18,3 28,6 18,9" fill="#555"/></svg> },
                         ].map(({ label, shape }) => (
                           <div key={label} className="flex items-center gap-1.5">
@@ -1650,7 +1578,6 @@ function DesignerInner() {
                         if (d.numSegments !== undefined) rows.push({ label: 'Segments', value: String(d.numSegments) });
                         if (d.rq !== undefined && d.rq !== '') rows.push({ label: 'Rated Flow', value: String(d.rq) });
                         if (d.rhead !== undefined && d.rhead !== '') rows.push({ label: 'Rated Head', value: String(d.rhead) });
-                        if (d.turbineType !== undefined) rows.push({ label: 'Turbine Type', value: String(d.turbineType) });
                         if (d.syncSpeed !== undefined && d.syncSpeed !== '') rows.push({ label: 'Sync Speed', value: String(d.syncSpeed) });
                         if (d.comment) rows.push({ label: 'Comment', value: String(d.comment) });
                       }

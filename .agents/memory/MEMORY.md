@@ -1,7 +1,7 @@
 - [Excel multi-sheet export/import](excel-multisheet.md) — multi-sheet workbook added to excel-io.ts; `_addWorksheetToWb` is the shared helper; listSheetSuffix avoids _Lists name collisions.
 - [Help modal](help-modal.md) — HelpModal.tsx created; showHelp state already existed in Header.tsx; Help button placed after Arrange in title bar.
-- [INP parser comment extraction](inp-comment-extraction.md) — generic WHAMO section headers ("RESERVOIRS", "TURBINES", etc.) must be excluded from pendingComment, not attached to elements.
-- [Duplicate element IDs](inp-duplicate-ids.md) — flowBoundary/pump/checkValve/turbine labels must be globally unique; duplicates silently break JSON-vs-INP round-trips.
+- [INP parser comment extraction](inp-comment-extraction.md) — generic WHAMO section headers must be excluded from pendingComment, not attached to elements.
+- [Duplicate element IDs](inp-duplicate-ids.md) — flowBoundary/pump/checkValve labels must be globally unique; duplicates silently break JSON-vs-INP round-trips.
 - [Auto-arrange crossing bug](autoarrange-layout-crossing.md) — barycenter using parents+children together in one pass can flip sibling order between adjacent levels, crossing parallel branches that shouldn't cross.
 - [OPPUMP mode parsing](oppump-mode.md) — oppumps changed from Set to Map storing {mode,toff?}; pumpOpMode/pumpToff added to both NodeData and EdgeData; generator writes SHUTOFF TOFF X vs PUMP correctly.
 - [Root typecheck baseline](root-typecheck-baseline.md) — the imported root app can build and run while its legacy npm run check still reports unrelated TypeScript errors.
@@ -9,4 +9,3 @@
 - [Conduit and surge-tank shape equivalents](conduit-variable-shapes.md) — export named diameter profiles as circular equivalents while keeping surge-tank SHAPE pairs independent.
 - [Imported app verification](imported-app-verification.md) — independently verify Designer login/database and standalone viewer assets; one healthy app does not validate the other.
 - [Legacy element compatibility](legacy-element-compat.md) — hide retired element types in the UI while preserving imported data and INP round-trips.
-- [Turbine mode retirement](turbine-mode-retirement.md) — keep retired turbine modes out of new choices while preserving imported legacy mode data and INP round-trips.

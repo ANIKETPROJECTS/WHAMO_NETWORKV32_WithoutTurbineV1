@@ -29,7 +29,6 @@ interface ParsedElements {
   flowBCs: Map<string, { scheduleNumber: number }>;
   oppumps: Map<string, { mode: string; toff?: number }>;
   pchar: Map<number, PcharType>;
-  vSchedules: Map<number, { t: number; g: number }[]>;
 }
 
 function joinContinuationLines(lines: string[]): string[] {
@@ -128,7 +127,6 @@ function parseElementProperties(lines: string[]): ParsedElements {
   const flowBCs = new Map<string, { scheduleNumber: number }>();
   const oppumps = new Map<string, { mode: string; toff?: number }>();
   const pchar = new Map<number, PcharType>();
-  const vSchedules = new Map<number, { t: number; g: number }[]>();
 
   const joined = joinContinuationLines(lines);
 
@@ -237,22 +235,6 @@ function parseElementProperties(lines: string[]): ParsedElements {
         if (/^SCHEDULE\b|^HISTORY\b|^CONTROL\b|^DISPLAY\b|^OPPUMP\b|^RESERVOIR\b|^CONDUIT\b|^PUMP\b/i.test(ln)) { i = j - 1; break; }
         block.push(ln);
       }
-      // Only handle VSCHEDULE blocks here; skip HSCHEDULE/QSCHEDULE (handled elsewhere)
-      const blockText = block.join(' ');
-      if (/\bVSCHEDULE\b/i.test(blockText)) {
-        const numM = blockText.match(/\bVSCHEDULE\s+(\d+)/i);
-        if (numM) {
-          const schedNum = parseInt(numM[1]);
-          const pts: { t: number; g: number }[] = [];
-          for (const ln of block) {
-            const tgMatches = ln.matchAll(/\bT\s+([\d.]+)\s+G\s+([\d.]+)/gi);
-            for (const m of tgMatches) {
-              pts.push({ t: parseFloat(m[1]), g: parseFloat(m[2]) });
-            }
-          }
-          vSchedules.set(schedNum, pts);
-        }
-      }
       continue;
     }
 
@@ -302,7 +284,7 @@ function parseElementProperties(lines: string[]): ParsedElements {
             i = j;
             break;
           }
-          if (/^RESERVOIR\b|^CONDUIT\b|^PUMP\b|^ONEWAY\b|^TURBINE\b|^SURGETANK\b|^FLOWBC\b|^PCHAR\b|^OPPUMP\b|^OPTURB\b/i.test(ln)) {
+          if (/^RESERVOIR\b|^CONDUIT\b|^PUMP\b|^ONEWAY\b|^SURGETANK\b|^FLOWBC\b|^PCHAR\b|^OPPUMP\b/i.test(ln)) {
             i = j - 1;
             break;
           }
@@ -377,7 +359,7 @@ function parseElementProperties(lines: string[]): ParsedElements {
             i = j;
             break;
           }
-          if (/^RESERVOIR\b|^CONDUIT\b|^PUMP\b|^ONEWAY\b|^TURBINE\b|^SURGETANK\b|^FLOWBC\b|^PCHAR\b|^OPPUMP\b|^OPTURB\b/i.test(ln)) {
+          if (/^RESERVOIR\b|^CONDUIT\b|^PUMP\b|^ONEWAY\b|^SURGETANK\b|^FLOWBC\b|^PCHAR\b|^OPPUMP\b/i.test(ln)) {
             i = j - 1;
             break;
           }
@@ -412,7 +394,7 @@ function parseElementProperties(lines: string[]): ParsedElements {
           const ln = lines[j].trim();
           if (!ln) continue;
           if (/^FINISH\b/i.test(ln)) { i = j; break; }
-          if (/^RESERVOIR\b|^CONDUIT\b|^PUMP\b|^ONEWAY\b|^TURBINE\b|^SURGETANK\b|^FLOWBC\b|^OPPUMP\b|^OPTURB\b/i.test(ln)) { i = j - 1; break; }
+          if (/^RESERVOIR\b|^CONDUIT\b|^PUMP\b|^ONEWAY\b|^SURGETANK\b|^FLOWBC\b|^OPPUMP\b/i.test(ln)) { i = j - 1; break; }
           block.push(ln);
         }
       }
@@ -433,7 +415,7 @@ function parseElementProperties(lines: string[]): ParsedElements {
           const ln = lines[j].trim();
           if (!ln) continue;
           if (/^FINISH\b/i.test(ln)) { i = j; break; }
-          if (/^RESERVOIR\b|^CONDUIT\b|^PUMP\b|^TURBINE\b|^SURGETANK\b|^FLOWBC\b|^OPPUMP\b|^OPTURB\b/i.test(ln)) { i = j - 1; break; }
+          if (/^RESERVOIR\b|^CONDUIT\b|^PUMP\b|^SURGETANK\b|^FLOWBC\b|^OPPUMP\b/i.test(ln)) { i = j - 1; break; }
           block.push(ln);
           rawBlock.push(ln);
         }
@@ -488,7 +470,7 @@ function parseElementProperties(lines: string[]): ParsedElements {
           const ln = lines[j].trim();
           if (!ln) continue;
           if (/^FINISH\b/i.test(ln)) { i = j; break; }
-          if (/^RESERVOIR\b|^CONDUIT\b|^PUMP\b|^TURBINE\b|^SURGETANK\b|^FLOWBC\b|^OPPUMP\b|^OPTURB\b/i.test(ln)) { i = j - 1; break; }
+          if (/^RESERVOIR\b|^CONDUIT\b|^PUMP\b|^SURGETANK\b|^FLOWBC\b|^OPPUMP\b/i.test(ln)) { i = j - 1; break; }
           block.push(ln);
         }
       }
@@ -517,7 +499,7 @@ function parseElementProperties(lines: string[]): ParsedElements {
   if (inPchar) {
     flushPchar();
   }
-  return { reservoirs, conduits, pumps, oneway, surgeTanks, flowBCs, oppumps, pchar, vSchedules };
+  return { reservoirs, conduits, pumps, oneway, surgeTanks, flowBCs, oppumps, pchar };
 }
 
 /**
@@ -545,8 +527,6 @@ const GENERIC_SECTION_HEADERS = new Set([
   'PARAMETERS',
   'CONDUITS',
   'CONDUIT',
-  'TURBINES',
-  'TURBINE',
   'PUMPS',
   'PUMP',
   'VALVES',
@@ -610,8 +590,8 @@ function extractComments(rawLines: string[]): {
       continue;
     }
 
-    // Element block keyword (RESERVOIR / CONDUIT / PUMP / TURBINE / ONEWAY / SURGETNK / FLOWBC)
-    if (/^(?:RESERVOIR|CONDUIT|PUMP|TURBINE|ONEWAY|SURGETNK|FLOWBC)\b/i.test(line)) {
+    // Element block keyword (RESERVOIR / CONDUIT / PUMP / ONEWAY / SURGETNK / FLOWBC)
+    if (/^(?:RESERVOIR|CONDUIT|PUMP|ONEWAY|SURGETNK|FLOWBC)\b/i.test(line)) {
       if (pendingComment) {
         // Check for inline ID first
         const inlineId = line.match(/\bID\s+(\S+)/i);
@@ -646,9 +626,9 @@ function buildReactFlowGraph(
   projectName: string,
   nodeComments: Map<string, string> = new Map(),
   elementComments: Map<string, string> = new Map()
-): { nodes: WhamoNode[]; edges: WhamoEdge[]; pcharData: Record<number, PcharType>; tcharData: Record<number, TcharType>; vSchedules: Record<number, { t: number; g: number }[]> } {
+): { nodes: WhamoNode[]; edges: WhamoEdge[]; pcharData: Record<number, PcharType> } {
   const { elemLinks, allElemLinks, elemAt, allElemAt, junctions, nodeElevations } = topo;
-  const { reservoirs, conduits, pumps, turbines, oneway, oppumps, opturbs, surgeTanks, flowBCs } = elems;
+  const { reservoirs, conduits, pumps, oneway, oppumps, surgeTanks, flowBCs } = elems;
 
   let rfIdCounter = 1;
   const nextId = () => String(rfIdCounter++);
@@ -770,19 +750,6 @@ function buildReactFlowGraph(
         id: rfId, type: 'flowBoundary', position: pos,
         data: { label: atElemId, type: 'flowBoundary', nodeNumber: nodeNum, elevation: elev,
           scheduleNumber: fb.scheduleNumber,
-          comment: elementComments.get(atElemId) }
-      });
-    } else if (atElemId && turbines.has(atElemId)) {
-      const t = turbines.get(atElemId)!;
-      const opInfo = opturbs.get(atElemId);
-      nodeObjects.push({
-        id: rfId, type: 'turbine', position: pos,
-        data: { label: atElemId, type: 'turbine', nodeNumber: nodeNum, elevation: elev,
-          turbineType: t.turbineType, syncSpeed: t.syncSpeed, wr2: t.wr2,
-          turbFriction: t.turbFriction, windage: t.windage, turbineDiameter: t.turbineDiameter,
-          operationMode: opInfo?.mode || 'OFF', vScheduleNumber: opInfo?.vScheduleNumber ?? 1,
-          turbineToff: opInfo?.turbineToff ?? 2, governorTW: opInfo?.governorTW,
-          governorLoadHP: opInfo?.governorLoadHP, loadScheduleNumber: opInfo?.loadScheduleNumber ?? 1,
           comment: elementComments.get(atElemId) }
       });
     } else if (atElemId && pumps.has(atElemId)) {
@@ -917,43 +884,6 @@ function buildReactFlowGraph(
     });
   });
 
-  // Turbines AT nodes
-  allElemAt.forEach(({ id: elemId, nodeId }) => {
-    if (!turbines.has(elemId)) return;
-    if (nodeIdMap.has(nodeId)) return;
-    const t = turbines.get(elemId)!;
-    const rfId = nextId();
-    nodeIdMap.set(nodeId, rfId);
-    const elev = nodeElevations.get(nodeId) ?? 0;
-    const pos = getPos(nodeId);
-    const nodeNum = parseInt(nodeId) || nodeObjects.length + 1;
-    const opInfo = opturbs.get(elemId);
-    nodeObjects.push({
-      id: rfId,
-      type: 'turbine',
-      position: pos,
-      data: {
-        label: elemId,
-        type: 'turbine',
-        nodeNumber: nodeNum,
-        elevation: elev,
-        turbineType: t.turbineType,
-        syncSpeed: t.syncSpeed,
-        wr2: t.wr2,
-        turbFriction: t.turbFriction,
-        windage: t.windage,
-        turbineDiameter: t.turbineDiameter,
-        operationMode: opInfo?.mode || 'OFF',
-        vScheduleNumber: opInfo?.vScheduleNumber ?? 1,
-        turbineToff: opInfo?.turbineToff ?? 2,
-        governorTW: opInfo?.governorTW,
-        governorLoadHP: opInfo?.governorLoadHP,
-        loadScheduleNumber: opInfo?.loadScheduleNumber ?? 1,
-        comment: elementComments.get(elemId),
-      }
-    });
-  });
-
   // Pumps AT nodes
   allElemAt.forEach(({ id: elemId, nodeId }) => {
     if (!pumps.has(elemId)) return;
@@ -1018,7 +948,7 @@ function buildReactFlowGraph(
   // Iterate ALL link occurrences so every segment (e.g. C1 reused 7 times) creates an edge
   allElemLinks.forEach(({ id: elemId, from, to }) => {
 
-    // Pumps, turbines, and check valves that use LINK are EDGE elements —
+    // Pumps and check valves that use LINK are EDGE elements —
     // they render as a circular icon on the connection line (like a labelled
     // conduit) rather than as an intermediate node.
     if (pumps.has(elemId)) {
@@ -1044,37 +974,6 @@ function buildReactFlowGraph(
           wr2: p.wr2,
           pumpOpMode: oppumpInfo?.mode ?? 'PUMP',
           pumpToff: oppumpInfo?.toff,
-          comment: elementComments.get(elemId),
-        }
-      });
-      return;
-    }
-
-    if (turbines.has(elemId)) {
-      const t = turbines.get(elemId)!;
-      const fromRfId = getOrCreateWhamoNode(from);
-      const toRfId = getOrCreateWhamoNode(to);
-      const opInfo = opturbs.get(elemId);
-      edgeObjects.push({
-        id: nextId(),
-        source: fromRfId,
-        target: toRfId,
-        type: 'connection',
-        data: {
-          label: elemId,
-          type: 'turbine',
-          turbineType: t.turbineType,
-          syncSpeed: t.syncSpeed,
-          wr2: t.wr2,
-          turbFriction: t.turbFriction,
-          windage: t.windage,
-          turbineDiameter: t.turbineDiameter,
-          operationMode: opInfo?.mode || 'OFF',
-          vScheduleNumber: opInfo?.vScheduleNumber ?? 1,
-          turbineToff: opInfo?.turbineToff ?? 2,
-          governorTW: opInfo?.governorTW,
-          governorLoadHP: opInfo?.governorLoadHP,
-          loadScheduleNumber: opInfo?.loadScheduleNumber ?? 1,
           comment: elementComments.get(elemId),
         }
       });
@@ -1172,13 +1071,7 @@ function buildReactFlowGraph(
   const pcharData: Record<number, PcharType> = {};
   elems.pchar.forEach((pc, pType) => { pcharData[pType] = pc; });
 
-  const tcharData: Record<number, TcharType> = {};
-  elems.tchar.forEach((tc, tType) => { tcharData[tType] = tc; });
-
-  const vSchedulesObj: Record<number, { t: number; g: number }[]> = {};
-  elems.vSchedules.forEach((pts, num) => { vSchedulesObj[num] = pts; });
-
-  return { nodes: nodeObjects, edges: edgeObjects, pcharData, tcharData, vSchedules: vSchedulesObj };
+  return { nodes: nodeObjects, edges: edgeObjects, pcharData };
 }
 
 export function parseInpFile(content: string): {
@@ -1189,11 +1082,13 @@ export function parseInpFile(content: string): {
   hSchedules: { number: number; points: { time: number; head: number }[] }[];
   qSchedules: Record<number, { time: number; flow: number }[]>;
   pcharData: Record<number, PcharType>;
-  tcharData: Record<number, TcharType>;
-  vSchedules: Record<number, { t: number; g: number }[]>;
   outputRequests: { id: string; elementId: string; elementType: 'node' | 'edge'; isElement?: boolean; requestType: 'HISTORY'; variables: string[] }[];
   nodeSelectionSet: string[];
+  unit: 'SI' | 'FPS';
 } {
+  if (/^\s*(?:TURBINE|TCHAR|OPTURB|GOVERNOR)\b/im.test(content)) {
+    throw new Error('This input file contains unsupported element data and cannot be imported.');
+  }
   // ── Strip all comment lines first (lines whose first non-space token is "C") ──
   // This lets all downstream section-detection logic focus on core structure only.
   const rawLines = content.split('\n');
@@ -1210,7 +1105,7 @@ export function parseInpFile(content: string): {
     const t = rl.trim();
     if (!t) continue;
     if (/^[cC](\s|$)/.test(t)) continue;  // skip comment lines
-    if (/^SYSTEM\b|^RESERVOIR\b|^CONDUIT\b|^PUMP\b|^TURBINE\b|^CONTROL\b|^GO\b|^GOODBYE\b/i.test(t)) break;
+    if (/^SYSTEM\b|^RESERVOIR\b|^CONDUIT\b|^PUMP\b|^CONTROL\b|^GO\b|^GOODBYE\b/i.test(t)) break;
     projectName = t;
     break;
   }
@@ -1362,7 +1257,7 @@ export function parseInpFile(content: string): {
     flushQSched(); // flush any trailing schedule not terminated by FINISH
   }
 
-  const { nodes, edges, pcharData, tcharData, vSchedules } = buildReactFlowGraph(topo, elems, projectName, nodeComments, elementComments);
+  const { nodes, edges, pcharData } = buildReactFlowGraph(topo, elems, projectName, nodeComments, elementComments);
 
   // ── Back-calculate Manning's n from friction + diameter ────────────────────
   // Formula: f = 185·n²/D^(1/3)  →  n = sqrt(f·D^(1/3) / 185)
@@ -1467,5 +1362,5 @@ export function parseInpFile(content: string): {
     break;
   }
 
-  return { nodes, edges, projectName, computationalParams, hSchedules, qSchedules, pcharData, tcharData, vSchedules, outputRequests, nodeSelectionSet, unit: parsedUnit };
+  return { nodes, edges, projectName, computationalParams, hSchedules, qSchedules, pcharData, outputRequests, nodeSelectionSet, unit: parsedUnit };
 }

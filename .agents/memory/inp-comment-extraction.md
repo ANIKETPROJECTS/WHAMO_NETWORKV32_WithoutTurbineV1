@@ -12,8 +12,7 @@ comment separated them.
 
 **Why:** the header text is a section divider for the whole file, not an
 annotation for the specific element that happens to follow it; attaching it
-produced spurious comments like "TURBINES" or "ELEMENT PROPERTIES" on
-reservoirs/turbines/valves after import.
+produced spurious comments like "ELEMENT PROPERTIES" on imported elements.
 
 **How to apply:** `extractComments()` now skips setting `pendingComment` for
 lines matching `GENERIC_SECTION_HEADERS` (case-insensitive, whitespace-

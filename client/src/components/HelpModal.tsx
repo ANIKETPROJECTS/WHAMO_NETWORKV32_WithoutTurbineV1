@@ -5,7 +5,6 @@ import jsPDF from 'jspdf';
 import damIcon from '@assets/dam_1779522984604.png';
 import yIntersectionIcon from '@assets/y-intersection_(1)_1779523210044.png';
 import waterTankIcon from '@assets/water-tank_(2)_1779523360829.png';
-import turbineImgIcon from '@assets/turbine_1779523517554.png';
 import windIcon from '@assets/wind_1779523398812.png';
 
 interface HelpModalProps {
@@ -324,9 +323,9 @@ function downloadPDF() {
 
   const tocItems = [
     ['01', 'Getting Started',      'Creating a project, opening, saving, undo/redo'],
-    ['02', 'Network Elements',     'Reservoir, Node, Junction, Surge Tank, Flow BC, Turbine, Conduit, Dummy Pipe'],
+    ['02', 'Network Elements',     'Reservoir, Node, Junction, Surge Tank, Flow BC, Conduit, Dummy Pipe'],
     ['03', 'All Properties',       'Full property reference for every element — name, unit, description, meaning, how to use'],
-    ['04', 'Connections',          'Drawing conduits and turbine links, connection rules, valid/invalid combinations'],
+    ['04', 'Connections',          'Drawing conduits, connection rules, valid/invalid combinations'],
     ['05', 'Flex Table',           'Spreadsheet editor, filters, units, T/H schedules, material'],
     ['06', 'Excel Import/Export',  'Single-tab and multi-sheet workbook workflows'],
     ['07', 'Running Simulations',  'Parameters, output requests, generating .OUT files'],
@@ -493,28 +492,6 @@ function downloadPDF() {
   ], y);
   y = noteBox('Unlike a Reservoir (which prescribes head), a Flow BC prescribes flow. Do not confuse the two — using the wrong boundary type will give incorrect simulation results.', y, true);
 
-  // TURBINE
-  y = subHeading('Turbine', y);
-  y = para('A Turbine is a link element that represents a hydraulic turbine (e.g., Francis, Pelton, Kaplan). Flow passes through the turbine and energy is extracted. WHAMO Designer offers the operation modes GENERATE, OFF, REJECT, and STARTUP.', y);
-  y = miniHeading('Purpose & When to Use', y);
-  y = bulletList([
-    'Use to model hydroelectric turbines and their load-rejection or emergency shutdown transients.',
-    'GENERATE: operates at synchronous speed using a gate schedule.',
-    'OFF: leaves the turbine unoperated.',
-    'REJECT: simulates load rejection at the entered TOFF time using a gate schedule.',
-    'STARTUP: starts from zero rpm under non-governor wicket-gate control; speed varies without transitioning to synchronized operation. Pump-mode startup is not simulated.',
-    'Use with surge tanks and pressure relief valves in hydroelectric system transient studies.',
-  ], y);
-  y = miniHeading('Properties', y);
-  y = propTable([
-    ['Label', 'Unique identifier (required).'],
-    ['Mode', 'GENERATE, OFF, REJECT, or STARTUP, matching the WHAMO OPTURB operations.'],
-    ['Gate Schedule (V-Schedule)', 'Time/gate-position pairs used by GENERATE, REJECT, and STARTUP.'],
-    ['Speed', 'Rated rotational speed of the turbine (rpm).'],
-    ['Inertia', 'Combined moment of inertia of turbine and generator (kg·m²). Affects speed transient response.'],
-  ], y);
-  y = noteBox('GENERATE, REJECT, and STARTUP require a gate schedule. Enter the mode-specific values before generating the input file.', y, true);
-
   // CONDUIT & DUMMY PIPE
   y = subHeading('Conduit (Pipe)', y);
   y = para('A Conduit is the fundamental flow-carrying element in WHAMO. Every pair of connected nodes is linked by a conduit, which represents a pipe section with defined hydraulic properties. The conduit carries both steady-state and transient flow between elements.', y);
@@ -594,23 +571,6 @@ function downloadPDF() {
     'Connecting two elements with a conduit that has zero length or diameter in production networks.',
   ], y);
   y = noteBox('Every conduit must have non-zero Length, Diameter, and Celerity before running a simulation. Missing values will cause a validation error.', y, true);
-
-  y = subHeading('Turbine Link', y);
-  y = para('A Turbine Link is a conduit with a Turbine element that extracts energy from the flow. Used in hydroelectric systems to model generator units and their transient behaviour during load rejection or emergency shutdown.', y);
-  y = miniHeading('How to Draw', y);
-  y = stepList([
-    'Click the Turbine button in the INSERT ribbon to activate turbine link mode.',
-    'Drag from the upstream node (high-head end) to the downstream node (tailrace).',
-    'The connection is created with the Turbine type set.',
-    'Set Mode, Gate Schedule, Speed, and Inertia in the Flex Table.',
-  ], y);
-  y = miniHeading('Connection Rules', y);
-  y = bulletList([
-    'Turbine must connect two nodes. Upstream node typically connects to a penstock conduit from a Reservoir.',
-    'Downstream node connects to the tailrace (often another Reservoir or Node at low elevation).',
-    'A gate schedule (V-Schedule) is used by GENERATE, REJECT, and STARTUP modes.',
-  ], y);
-  y = noteBox('For hydroelectric systems, always include a surge tank on the penstock near the turbine. Without it, load rejection transients can produce extreme over-pressures.', y, true);
 
   y = subHeading('Reservoir Connections', y);
   y = para('A Reservoir connects to the network via one or more standard conduits. It provides the head boundary condition at its connection point.', y);
@@ -698,7 +658,7 @@ function downloadPDF() {
   y = stepList([
     'Click Generate → .INP or .OUT to open the generation panel and configure output requests below the parameters.',
     'Select a node or element, or choose a group type (Nodes, Conduits, Elements).',
-    'Tick the variables you want: Q, HEAD, ELEV, VEL, PRESS, PIEZHEAD (or Q, HEAD, SPEED, POWER for turbines).',
+    'Tick the variables you want to record for the selected output request.',
     'Choose HISTORY, select an element and variables, then click Add Request. Requests are only created when you add them manually.',
     'Review the Current Requests list at the bottom.',
   ], y);
@@ -805,10 +765,6 @@ function downloadPDF() {
       'Reservoir connection gives unrealistic results',
       'Check that the Reservoir elevation is set correctly and that the Loss Coefficient is appropriate (0.5 for sharp-edged inlet, 0.0 for fully flush connection).',
     ],
-    [
-      'Turbine simulation aborts immediately',
-      'In REJECT mode, define at least two gate schedule (V-Schedule) pairs. GENERATE and STARTUP also need a gate schedule.',
-    ],
   ];
   for (const [q, a] of issues) {
     if (y > PH - 40) { newPage(); y = 30; }
@@ -905,25 +861,6 @@ function FlowBCSVG() {
   );
 }
 
-function TurbineSVG() {
-  const size = 120;
-  const inner = 84;
-  return (
-    <div style={{ width: size, height: size, position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-      <div style={{
-        width: inner, height: inner, background: '#16a34a',
-        border: '3px solid #166534', borderRadius: 7,
-        transform: 'rotate(45deg)', position: 'absolute',
-      }} />
-      <div style={{ position: 'relative', zIndex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3 }}>
-        <img src={turbineImgIcon} alt="Turbine"
-          style={{ width: 44, height: 44, objectFit: 'contain', filter: 'brightness(0) invert(1)' }} />
-        <span style={{ fontSize: 18, fontWeight: 700, color: '#fff', lineHeight: 1 }}>T1</span>
-      </div>
-    </div>
-  );
-}
-
 function ConduitSVG() {
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 0 }}>
@@ -956,7 +893,6 @@ const ELEMENT_SVG_MAP: Record<string, React.ReactNode> = {
   junction:      <JunctionSVG />,
   'surge-tank':  <SurgeTankSVG />,
   'flow-bc':     <FlowBCSVG />,
-  turbine:       <TurbineSVG />,
   conduit:       <ConduitSVG />,
   'dummy-pipe':  <DummyPipeSVG />,
 };
@@ -1049,15 +985,6 @@ function ConnectionDiagramSVG({ type }: { type: string }) {
       <DiagNode label="N1" />
       <DiagArrow dashed />
       <DiagNode icon={waterTankIcon} label="ST1" />
-    </DiagRow>
-  );
-  if (type === 'turbine-link') return (
-    <DiagRow>
-      <DiagNode icon={damIcon} label="R1" />
-      <DiagArrow />
-      <DiagNode icon={turbineImgIcon} label="T1" diamond />
-      <DiagArrow />
-      <DiagNode icon={damIcon} label="R2" />
     </DiagRow>
   );
   if (type === 'reservoir-conn') return (
@@ -1441,7 +1368,6 @@ const ELEMENT_OPTIONS = [
   { value: 'junction', label: 'Junction' },
   { value: 'surge-tank', label: 'Surge Tank' },
   { value: 'flow-bc', label: 'Flow BC' },
-  { value: 'turbine', label: 'Turbine' },
   { value: 'conduit', label: 'Conduit' },
   { value: 'dummy-pipe', label: 'Dummy Pipe' },
 ];
@@ -1642,50 +1568,6 @@ const ELEMENT_DATA = [
     ],
   },
   {
-    id: 'turbine',
-    name: 'Turbine',
-    badge: 'bg-cyan-700 text-white',
-    description: 'Link element representing a hydraulic turbine with GENERATE, OFF, REJECT, and STARTUP operation modes.',
-    purpose: [
-      'Model hydroelectric turbines and load-rejection or emergency shutdown transients.',
-      'GENERATE mode: synchronous-speed operation using a gate schedule.',
-      'OFF mode: turbine is not operated.',
-      'REJECT mode: load rejection at TOFF using a gate schedule.',
-      'STARTUP mode: starts from zero rpm under non-governor wicket-gate control; speed varies without transitioning to synchronized operation.',
-    ],
-    howToAdd: [
-      'Click the Turbine button in the INSERT ribbon to activate turbine link mode.',
-      'Drag from the upstream (high-head) node to the downstream (tailrace) node.',
-      'Set Mode, Gate Schedule, Speed, and Inertia in the Flex Table.',
-      'Click the Turbine button again to deactivate link mode.',
-    ],
-    properties: [
-      ['Label', 'Unique identifier (required).'],
-      ['Mode', 'GENERATE, OFF, REJECT, or STARTUP.'],
-      ['Gate Schedule (V-Schedule)', 'Time/gate-position pairs used by GENERATE, REJECT, and STARTUP.'],
-      ['Speed', 'Rated rotational speed of the turbine (rpm).'],
-      ['Inertia', 'Combined moment of inertia of turbine + generator (kg·m²).'],
-    ] as Array<[string, string]>,
-    bestPractices: [
-      'Always include a surge tank on the penstock near the turbine to absorb load-rejection transients.',
-      'Define a realistic gate closure schedule based on the actual governor response time.',
-      'Validate inertia values against the turbine manufacturer data sheet.',
-    ],
-    commonMistakes: [
-      'Not providing a Gate Schedule in REJECT, GENERATE, or STARTUP mode.',
-      'Setting very fast gate closure (< 1 s) without surge protection — generates extreme over-pressures.',
-    ],
-    warnings: [
-      'For hydroelectric systems: always include a surge tank on the penstock near the turbine inlet. Without it, load-rejection transients can produce dangerously high pressures.',
-      'GENERATE, REJECT, and STARTUP require a complete V-Schedule.',
-    ],
-    validationRules: [
-      'Gate Schedule must contain at least two pairs for GENERATE, REJECT, or STARTUP mode.',
-      'Speed and Inertia must be positive values.',
-      'Must connect two nodes; upstream at high head, downstream at low head.',
-    ],
-  },
-  {
     id: 'conduit',
     name: 'Conduit (Pipe)',
     badge: 'bg-slate-500 text-white',
@@ -1791,7 +1673,6 @@ const CONNECTION_OPTIONS = [
   { value: 'all', label: 'All Connections' },
   { value: 'conduit', label: 'Standard Conduit' },
   { value: 'dummy-pipe', label: 'Dummy Pipe' },
-  { value: 'turbine-link', label: 'Turbine Link' },
   { value: 'reservoir-conn', label: 'Reservoir Connections' },
   { value: 'surge-tank-conn', label: 'Surge Tank Connections' },
   { value: 'flow-bc-conn', label: 'Flow BC Connections' },
@@ -1870,42 +1751,6 @@ const CONNECTION_DATA = [
     troubleshooting: [
       'Simulation crash at Dummy Pipe: check that Length is a small positive number, not zero.',
       'Unexpected pressure drop through dummy pipe: ensure friction factor is set to 0 or very small.',
-    ],
-  },
-  {
-    id: 'turbine-link',
-    name: 'Turbine Link',
-    description: 'Conduit with a Turbine element. Extracts energy from flow for hydroelectric power generation.',
-    howToDraw: [
-      'Click the Turbine button in the INSERT ribbon (turns blue).',
-      'Drag from the upstream (penstock) node to the downstream (tailrace) node.',
-      'Set Mode (GENERATE, OFF, REJECT, or STARTUP), then fill in its required schedule settings.',
-      'Click Turbine button again to deactivate mode.',
-    ],
-    validConnections: [
-      'Node → Node (penstock junction to tailrace node)',
-      'Reservoir → Node (direct penstock from reservoir to turbine)',
-      'Node → Reservoir (turbine discharging to tailrace reservoir)',
-    ],
-    invalidConnections: [
-      'Surge Tank as turbine source or target',
-      'Flow BC as turbine source',
-      'Reverse direction (tailrace to penstock)',
-    ],
-    properties: [
-      ['Mode', 'GENERATE, OFF, REJECT, or STARTUP.'],
-      ['Gate Schedule (V-Schedule)', 'Time/gate-position pairs required for GENERATE, REJECT, and STARTUP.'],
-      ['Speed (rpm)', 'Rated turbine speed.'],
-      ['Inertia (kg·m²)', 'Combined inertia of turbine and generator shaft.'],
-    ] as Array<[string, string]>,
-    warnings: [
-      'Always include a surge tank on the penstock near the turbine. Without it, load-rejection transients generate dangerous over-pressures.',
-      'REJECT, GENERATE, and STARTUP require a complete V-Schedule.',
-    ],
-    troubleshooting: [
-      'Simulation fails: check that the selected turbine operation has its required schedule and settings.',
-      'Unrealistically high pressures on load rejection: add a surge tank on the penstock side.',
-      'Speed goes to zero immediately: verify Inertia value — too-small inertia causes instantaneous deceleration.',
     ],
   },
   {
@@ -2101,7 +1946,7 @@ function SimulationSection() {
       <StepList steps={[
         'Click Generate → .INP or .OUT to open the generation panel and configure output requests below the parameters.',
         'Select a node or element, or choose a group type (Nodes, Conduits, Elements).',
-        'Tick the variables: Q, HEAD, ELEV, VEL, PRESS, PIEZHEAD (or Q, HEAD, SPEED, POWER for turbines).',
+        'Tick the variables you want to record for the selected request.',
         'Choose HISTORY, select an element and variables, then click Add Request. Requests are only created when you add them manually.',
         'Review the Current Requests list at the bottom.',
       ]} />
@@ -2209,7 +2054,6 @@ function TroubleshootingSection() {
         { q: 'Surge Tank celerity is very high or infinite', a: 'Surge tanks are modelled as infinite-celerity elements in WHAMO. This is expected — do not adjust the celerity for surge tank connections.' },
         { q: 'Undo/Redo is not available', a: 'Undo/Redo is only available when a project is open. Make sure you have opened or saved a project first.' },
         { q: 'Reservoir connection gives unrealistic results', a: 'Check that the Reservoir elevation is set correctly and that the Loss Coefficient is appropriate (0.5 for sharp-edged inlet, 0.0 for fully flush connection).' },
-        { q: 'Turbine simulation aborts immediately', a: 'Check that the selected turbine mode has its required V-Schedule and that its time/gate values are valid.' },
         { q: 'Flow BC not affecting simulation', a: 'Check that Mode is set correctly (Fixed or Schedule) and that Q-Schedule # references a valid defined schedule. Verify Q sign: positive for inflow, negative for extraction.' },
         { q: 'Junction demand not appearing in results', a: 'Demand at a Junction is a steady-state extraction. Verify the demand value in the Flex Table and ensure the output request includes the junction node.' },
       ].map(({ q, a }) => (
@@ -2317,22 +2161,6 @@ const ALL_ELEMENT_PROPS: ElementProps[] = [
     ],
   },
   {
-    id: 'turbine',
-    element: 'Turbine',
-    badge: 'Turbine',
-    badgeColor: 'bg-yellow-600',
-    properties: [
-      { name: 'Label / ID', description: 'Unique alphanumeric identifier for the turbine link.', meaning: 'Identifies the turbine conduit in the INP file.', howToUse: 'Use a short label such as "T1".' },
-      { name: 'Comment', description: 'Free-text internal comment (c/C style).', meaning: 'Not used in simulation.', howToUse: 'Note the turbine model, rated output, or design conditions.' },
-      { name: 'TCHAR Type', description: 'Turbine characteristic curve type (TYPE 1, TYPE 2, etc.).', meaning: 'Selects the set of dimensionless characteristic curves used to model turbine behaviour. TYPE 1 is the generic Francis turbine.', howToUse: 'Select the type matching your turbine. Consult the WHAMO manual for available types.' },
-      { name: 'Sync Speed (SYNCSPD)', unit: 'RPM', description: 'Synchronous speed of the turbine-generator set.', meaning: 'The rated operating speed. Used in runaway and load-rejection transient calculations.', howToUse: 'Enter the nameplate synchronous speed from the generator datasheet.' },
-      { name: 'WR² — Moment of Inertia', unit: 'lb·ft² or kg·m²', description: 'Combined rotational inertia of turbine, shaft, and generator.', meaning: 'Controls the rate of speed rise during load rejection. Higher WR² = slower overspeed = smaller pressure transients.', howToUse: 'Obtain from the manufacturer. For Francis turbines, a typical range is 500–5000 lb·ft².' },
-      { name: 'Diameter', unit: 'ft / m', description: 'Runner diameter of the turbine.', meaning: 'Used in dimensionless specific speed calculations for the turbine characteristic curves.', howToUse: 'Enter the runner diameter from the turbine datasheet.' },
-      { name: 'Mode', description: 'Supported WHAMO operations: GENERATE, OFF, REJECT, and STARTUP.', meaning: 'GENERATE uses synchronous-speed gate control; OFF leaves the turbine unoperated; REJECT applies load rejection at TOFF; STARTUP starts from zero rpm under non-governor gate control without synchronizing.', howToUse: 'Choose a mode and complete its required schedule values before generating the INP file.' },
-      { name: 'Gate Schedule (V-Schedule)', description: 'Time vs wicket-gate opening percentage pairs for GENERATE, REJECT, and STARTUP.', meaning: 'Prescribes gate position as percent of fully open over time.', howToUse: 'Enter at least two time/gate pairs in the Flex Table schedule editor; time begins at 0 and gate position is entered as a percent.' },
-    ],
-  },
-  {
     id: 'conduit',
     element: 'Conduit',
     badge: 'Conduit',
@@ -2370,7 +2198,6 @@ const PROP_FILTER_OPTIONS = [
   { value: 'junction',    label: 'Junction' },
   { value: 'surge-tank',  label: 'Surge Tank' },
   { value: 'flow-bc',     label: 'Flow BC' },
-  { value: 'turbine',     label: 'Turbine' },
   { value: 'conduit',     label: 'Conduit' },
   { value: 'dummy-pipe',  label: 'Dummy Pipe' },
 ];
@@ -2454,7 +2281,6 @@ const VIDEO_FILTER_OPTIONS = [
   { value: 'junction',          label: 'Junction' },
   { value: 'surge-tank',        label: 'Surge Tank' },
   { value: 'flow-bc',           label: 'Flow BC' },
-  { value: 'turbine',           label: 'Turbine' },
   { value: 'conduit',           label: 'Conduit' },
   { value: 'flex-table',        label: 'Flex Table' },
   { value: 'visualization',     label: 'Visualization' },
@@ -2481,7 +2307,6 @@ const VIDEO_DATA: VideoEntry[] = [
   { id: 'v-junction', title: 'Creating a Demand Junction', description: 'Place a Junction element at a lateral off-take point, connect it to the main line, and set a steady-state demand flow value.', category: 'junction', categoryLabel: 'Junction', categoryColor: 'bg-emerald-600', duration: '~3 min', src: null },
   { id: 'v-surge-tank', title: 'Installing a Surge Tank', description: 'Place a Surge Tank beside the pipeline, connect via a short Dummy Pipe riser, and configure tank top, bottom, and initial water level.', category: 'surge-tank', categoryLabel: 'Surge Tank', categoryColor: 'bg-purple-600', duration: '~4 min', src: null },
   { id: 'v-flow-bc', title: 'Setting Up a Flow Boundary Condition', description: 'Add a Flow BC element, connect it to the network, choose Fixed or Schedule mode, and configure the flow rate or Q-Schedule.', category: 'flow-bc', categoryLabel: 'Flow BC', categoryColor: 'bg-orange-600', duration: '~3 min', src: null },
-  { id: 'v-turbine', title: 'Connecting a Turbine Element', description: 'Activate Turbine link mode, draw from penstock node to tailrace node, choose a supported WHAMO mode, and fill in its required settings.', category: 'turbine', categoryLabel: 'Turbine', categoryColor: 'bg-cyan-700', duration: '~5 min', src: null },
   { id: 'v-conduit', title: 'Configuring Conduit Properties', description: 'Select a conduit in the Flex Table, set Length, Diameter, Celerity and Friction, use the Pipe Material selector to auto-calculate wave speed.', category: 'conduit', categoryLabel: 'Conduit', categoryColor: 'bg-slate-500', duration: '~4 min', src: null },
   // Feature tutorials
   { id: 'v-flex-table', title: 'Using the Flex Table', description: 'Open the Flex Table, filter by element type, edit cells inline, toggle SI/FPS units, and use the material selector to bulk-update conduit properties.', category: 'flex-table', categoryLabel: 'Flex Table', categoryColor: 'bg-indigo-600', duration: '~6 min', src: null },
@@ -2549,18 +2374,6 @@ function AN({ icon, label, size = 38, style = {}, imgStyle = {} }: {
     }}>
       {icon && <img src={icon} alt="" style={{ width: size * 0.44, height: size * 0.44, objectFit: 'contain', ...imgStyle }} />}
       <span style={{ fontSize: Math.max(8, size * 0.22), fontWeight: 700, color: '#1e293b', lineHeight: 1, whiteSpace: 'nowrap' }}>{label}</span>
-    </div>
-  );
-}
-
-function VTurb({ size = 38, label = 'T1' }: { size?: number; label?: string }) {
-  return (
-    <div style={{ width: size, height: size, position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-      <div style={{ width: size * 0.72, height: size * 0.72, background: '#16a34a', border: '2px solid #166534', borderRadius: 3, transform: 'rotate(45deg)', position: 'absolute' }} />
-      <div style={{ position: 'relative', zIndex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-        <img src={turbineImgIcon} alt="" style={{ width: size * 0.36, height: size * 0.36, objectFit: 'contain', filter: 'brightness(0) invert(1)' }} />
-        <span style={{ fontSize: Math.max(7, size * 0.2), fontWeight: 700, color: '#fff', lineHeight: 1 }}>{label}</span>
-      </div>
     </div>
   );
 }
@@ -2823,46 +2636,6 @@ function buildFrames(id: string): AnimFrame[] {
           ))}
         </div>
         <Chip text="Flow BC configured ✓" color="#16a34a" />
-      </>) },
-    ];
-
-    // ── v-turbine ─────────────────────────────────────────────────────────
-    case 'v-turbine': return [
-      { ms: 1800, title: 'Activate Turbine link mode', content: col(<>
-        {row(<>
-          <ToolBtn icon="💎" label="Turbine" active />
-        </>, 8)}
-        <Chip text="Turbine: diamond-shaped link element" color="#0891b2" />
-      </>) },
-      { ms: 2000, title: 'Connect penstock reservoir to turbine', content: col(<>
-        {row(<>
-          <VN icon={damIcon} label="R1" size={38} />
-          <VArrow w={30} animated />
-          <VTurb size={46} />
-        </>)}
-        <Chip text="Penstock: R1 (high head) → T1" color="#0891b2" />
-      </>) },
-      { ms: 2000, title: 'Complete link to tailrace reservoir', content: col(<>
-        {row(<>
-          <VN icon={damIcon} label="R1" size={34} />
-          <VArrow w={24} />
-          <VTurb size={44} />
-          <VArrow w={24} animated />
-          <VN icon={damIcon} label="R2" size={34} />
-        </>)}
-        <Chip text="T1 penstock → tailrace R2 complete" color="#0891b2" />
-      </>) },
-      { ms: 2200, title: 'Set mode (STARTUP / REJECT) and required settings', content: col(<>
-        <div style={{ background: 'white', border: '1px solid #e2e8f0', borderRadius: 8, padding: '8px 14px', width: 185 }}>
-          <div style={{ fontSize: 9, fontWeight: 700, color: '#1e293b', marginBottom: 6 }}>T1 Properties</div>
-          {[['Mode','STARTUP'],['V-Schedule #','1'],['Gate Schedule','T/G pairs'],['Speed (RPM)','Variable']].map(([k, v]) => (
-            <div key={k} style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 3 }}>
-              <span style={{ fontSize: 9, color: '#64748b' }}>{k}</span>
-              <span style={{ fontSize: 9, fontWeight: 700, color: '#0891b2', fontFamily: 'monospace' }}>{v}</span>
-            </div>
-          ))}
-        </div>
-        <Chip text="Turbine starting up" color="#0891b2" />
       </>) },
     ];
 
@@ -3404,26 +3177,6 @@ function _ObsoleteAnimatedScene({ id }: { id: string }) {
           <div style={{ display: 'flex', gap: 6, animation: 'va-slide-u 0.5s 2s both' }}>
             <ALabel text="Mode: Q-Schedule" delay="2s" />
             <ALabel text="Q = 0.2 m³/s" color="#f59e0b" delay="2.3s" />
-          </div>
-        </div>
-      </div>
-    );
-
-    // ── Turbine ────────────────────────────────────────────────────────────
-    case 'v-turbine': return (
-      <div style={sceneStyle}>
-        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
-            <AN icon={damIcon} label="R1" size={36} style={{ animation: 'va-pop 0.5s 0s both' }} />
-            <AArrow w={20} />
-            <ATurb size={44} />
-            <AArrow w={20} />
-            <AN icon={damIcon} label="R2" size={36} style={{ animation: 'va-pop 0.5s 1.6s both' }} />
-          </div>
-          {/* Power output indicator */}
-          <div style={{ animation: 'va-slide-u 0.5s 2.2s both', display: 'flex', gap: 6 }}>
-            <ALabel text="Mode: STARTUP" delay="2.2s" color="#0891b2" />
-            <ALabel text="Starting up" delay="2.5s" color="#0891b2" />
           </div>
         </div>
       </div>

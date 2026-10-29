@@ -94,12 +94,7 @@ export function Toolbar({ onExport, onSave, onLoad }: { onExport: (fileName?: st
   const selectedActualId = selectedElementId.includes(':') ? selectedElementId.split(':')[1] : selectedElementId;
   const selectedNode = nodes.find(n => n.id === selectedActualId);
   const selectedEdge = edges.find(e => e.id === selectedActualId);
-  const isTurbineSelected =
-    (selectedNode && (selectedNode.type === 'turbine' || selectedNode.data?.type === 'turbine')) ||
-    (selectedEdge && selectedEdge.data?.type === 'turbine');
-  const availableVars = isTurbineSelected
-    ? ["Q", "HEAD", "SPEED", "POWER"]
-    : ["Q", "HEAD", "ELEV", "VEL", "PRESS", "PIEZHEAD"];
+  const availableVars = ["Q", "HEAD", "ELEV", "VEL", "PRESS", "PIEZHEAD"];
 
   const tools = [
     { label: 'Reservoir', icon: Cylinder, action: () => addNode('reservoir', { x: 100, y: 100 }), color: 'text-blue-600' },
@@ -107,7 +102,6 @@ export function Toolbar({ onExport, onSave, onLoad }: { onExport: (fileName?: st
     { label: 'Junction', icon: GitCommitHorizontal, action: () => addNode('junction', { x: 200, y: 150 }), color: 'text-red-500' },
     { label: 'Surge Tank', icon: PlusCircle, action: () => addNode('surgeTank', { x: 250, y: 100 }), color: 'text-orange-600' },
     { label: 'Flow BC', icon: ArrowRightCircle, action: () => addNode('flowBoundary', { x: 50, y: 150 }), color: 'text-green-600' },
-    { label: 'Turbine', icon: Settings2, action: () => addNode('turbine', { x: 400, y: 150 }), color: 'text-teal-600' },
   ];
 
   const handleRunWhamo = async (fileName?: string) => {
@@ -194,7 +188,7 @@ export function Toolbar({ onExport, onSave, onLoad }: { onExport: (fileName?: st
                         nodes.forEach(node => {
                           const nodeType = node.data?.type || node.type;
                           if (nodeType === 'pump' || nodeType === 'checkValve') return;
-                          const isSpecialElem = nodeType === 'surgeTank' || nodeType === 'turbine';
+                          const isSpecialElem = nodeType === 'surgeTank';
                           
                           const existsNode = outputRequests.some(req =>
                             req.elementId === node.id &&
@@ -283,23 +277,13 @@ export function Toolbar({ onExport, onSave, onLoad }: { onExport: (fileName?: st
                       <SelectContent>
                         <SelectItem value="_" disabled>Elements</SelectItem>
                         {nodes
-                          .filter(n => n.data.type === 'surgeTank' || n.data.type === 'turbine' || n.type === 'surgeTank' || n.type === 'turbine')
+                          .filter(n => n.data.type === 'surgeTank' || n.type === 'surgeTank')
                           .filter(n => !outputRequests.some(req => req.elementId === n.id && req.requestType === requestType && req.isElement))
                           .map(n => (
                             <SelectItem key={`element-${n.id}`} value={`element:${n.id}`}>
                               {n.data.label}
                             </SelectItem>
                           ))}
-                        {Array.from(new Map(
-                          edges
-                            .filter(e => e.data?.type === 'turbine')
-                            .filter(e => !outputRequests.some(req => req.elementId === e.id && req.requestType === requestType))
-                            .map(e => [e.data?.label || `Edge ${e.id}`, e])
-                        ).entries()).map(([label, e]) => (
-                          <SelectItem key={`turbine-edge-${e.id}`} value={e.id}>
-                            {label}
-                          </SelectItem>
-                        ))}
                         <SelectItem value="__" disabled>Nodes</SelectItem>
                         {nodes
                           .filter(n => !outputRequests.some(req => req.elementId === n.id && req.requestType === requestType && !req.isElement))
@@ -431,7 +415,7 @@ export function Toolbar({ onExport, onSave, onLoad }: { onExport: (fileName?: st
                       })
                       .map(req => {
                       const el = nodes.find(n => n.id === req.elementId) || edges.find(e => e.id === req.elementId);
-                      const isSpecialElemType = el?.data?.type === 'surgeTank' || el?.data?.type === 'turbine' || el?.type === 'surgeTank' || el?.type === 'turbine';
+                      const isSpecialElemType = el?.data?.type === 'surgeTank' || el?.type === 'surgeTank';
                       const isNodeElement = req.elementType === 'node' && isSpecialElemType && req.isElement;
                       const displayLabel = isNodeElement 
                         ? el?.data?.label 

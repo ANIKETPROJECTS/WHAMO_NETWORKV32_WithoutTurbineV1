@@ -1,4 +1,4 @@
-import { WhamoNode, WhamoEdge, useNetworkStore, TcharType } from './store';
+import { WhamoNode, WhamoEdge, useNetworkStore } from './store';
 import { saveAs } from 'file-saver';
 import { calculateEquivalentDiameter } from './cross-section-shapes';
 
@@ -72,7 +72,7 @@ export function generateInpFile(nodes: WhamoNode[], edges: WhamoEdge[], autoDown
     const actualNodeId = getPosition(nodeId);
 
     // Elements AT this node
-    if (node.type === 'reservoir' || node.type === 'surgeTank' || node.type === 'flowBoundary' || node.type === 'pump' || node.type === 'checkValve' || node.type === 'turbine') {
+    if (node.type === 'reservoir' || node.type === 'surgeTank' || node.type === 'flowBoundary' || node.type === 'pump' || node.type === 'checkValve') {
       connectivityLines.push(`ELEM ${node.data.label} AT ${actualNodeId}`);
       nodeIdsWithSpecialElements.add(actualNodeId);
     }
@@ -352,8 +352,8 @@ export function generateInpFile(nodes: WhamoNode[], edges: WhamoEdge[], autoDown
     addL('');
   });
 
-  // Validate that IDs which must be globally unique (flow boundaries, pumps, check valves,
-  // turbines) aren't reused across different elements. Unlike conduits — which may legitimately
+  // Validate that IDs which must be globally unique (flow boundaries, pumps, check valves)
+  // aren't reused across different elements. Unlike conduits — which may legitimately
   // share a label when they represent segments of the same physical pipe — these element types
   // each map to exactly one `ELEM <ID> AT <node>` / property block in the .inp file. Reusing an
   // ID silently drops one of the elements on export and produces a network that reads back
@@ -362,12 +362,11 @@ export function generateInpFile(nodes: WhamoNode[], edges: WhamoEdge[], autoDown
     flowBoundary: 'Flow Boundary',
     pump: 'Legacy element',
     checkValve: 'Legacy element',
-    turbine: 'Turbine',
   };
   const labelOwners = new Map<string, { typeName: string; count: number }>();
   [...nodes, ...edges].forEach(el => {
     // Edges always carry a generic React Flow `type` (e.g. "connection"); the actual element
-    // kind (pump/checkValve/turbine) lives in `data.type`. Nodes mirror the kind on both fields.
+    // kind (pump/checkValve) lives in `data.type`. Nodes mirror the kind on both fields.
     // Check `data.type` first so edge-based elements are detected correctly.
     const type = (el.data as any)?.type ?? (el as any).type;
     const typeName = uniqueIdTypes[type as string];
@@ -467,39 +466,6 @@ export function generateInpFile(nodes: WhamoNode[], edges: WhamoEdge[], autoDown
     addL('');
   });
 
-  const exportedTurbineLabels = new Set<string>();
-  const writeTurbineBlock = (d: any, unit: 'SI' | 'FPS') => {
-    const label = d.label as string;
-    if (exportedTurbineLabels.has(label)) return;
-    exportedTurbineLabels.add(label);
-    addComment(d.comment);
-    const tType = d.turbineType ?? 1;
-    const syncspd = Number(d.syncSpeed ?? 0);
-    const wr2 = Number(d.wr2 ?? 0);
-    const friction = Number(d.turbFriction ?? 0);
-    const windage = Number(d.windage ?? 0);
-    addL('TURBINE');
-    addL(` ID ${label}`);
-    addL(` TYPE ${tType}`);
-    addL(` SYNCSPD ${syncspd}`);
-    addL(` WR2 ${wr2}`);
-    if (d.turbineDiameter !== undefined && d.turbineDiameter !== '' && Number(d.turbineDiameter) !== 0) {
-      addL(` DIAMETER ${toFPS(Number(d.turbineDiameter), unit, 'diameter')}`);
-    }
-    addL(` FRICTION ${friction}`);
-    addL(` WINDAGE ${windage}`);
-    addL('FINISH');
-    addL('');
-  };
-  nodes.filter(n => n.type === 'turbine').forEach(n => {
-    if (!n.data) return;
-    writeTurbineBlock(n.data, (n.data.unit || globalUnit) as 'SI' | 'FPS');
-  });
-  edges.filter(e => e.data?.type === 'turbine').forEach(e => {
-    if (!e.data) return;
-    writeTurbineBlock(e.data, ((e.data.unit || globalUnit) as 'SI' | 'FPS'));
-  });
-
   // PCHAR sections (global, per pump type)
   const pcharData = state.pcharData || {};
   const pcharTypes = Object.keys(pcharData).map(Number).sort();
@@ -517,33 +483,6 @@ export function generateInpFile(nodes: WhamoNode[], edges: WhamoEdge[], autoDown
     const flat = pc.tratio;
     for (let i = 0; i < flat.length; i += 8) {
       addL(flat.slice(i, i + 8).join(' '));
-    }
-    addL('FINISH');
-    addL('');
-  });
-
-  // TCHAR sections (global, per turbine type)
-  const tcharData = state.tcharData || {};
-  const tcharTypes = Object.keys(tcharData).map(Number).sort();
-  tcharTypes.forEach(tType => {
-    const tc = tcharData[tType];
-    if (!tc) return;
-    addL(`TCHAR TYPE ${tType}`);
-    if (tc.gate.length > 0) {
-      addL('GATE');
-      addL(tc.gate.join(' '));
-    }
-    if (tc.head.length > 0) {
-      addL('HEAD');
-      addL(tc.head.join(' '));
-    }
-    if (tc.qMatrix.length > 0) {
-      addL('Q');
-      tc.qMatrix.forEach(row => addL(row.join(' ')));
-    }
-    if (tc.effMatrix.length > 0) {
-      addL('EFFICIENCY');
-      tc.effMatrix.forEach(row => addL(row.join(' ')));
     }
     addL('FINISH');
     addL('');
@@ -572,136 +511,6 @@ export function generateInpFile(nodes: WhamoNode[], edges: WhamoEdge[], autoDown
     }
     addL('');
   });
-
-  // OPTURB for turbines (nodes and element-edges)
-  const seenOpturb = new Set<string>();
-  const allTurbines = [
-    ...nodes.filter(n => n.type === 'turbine'),
-    ...edges.filter(e => e.data?.type === 'turbine'),
-  ];
-  const getTurbineMode = (data: Record<string, unknown> | undefined): string => {
-    const storedMode = String(data?.operationMode || 'OFF').toUpperCase();
-    if (storedMode === 'TURBGOV') return 'GOVERN';
-    if (storedMode === 'EMERGENCY') return 'REJECT';
-    if (storedMode === 'TURBINE') return 'OFF';
-    return storedMode;
-  };
-  const vSchedules = state.vSchedules || {};
-  const governedTurbines = allTurbines.filter(el => getTurbineMode(el.data) === 'GOVERN');
-  const loadScheduleOwners = new Map<number, number>();
-  allTurbines.forEach(el => {
-    const data = el.data as any;
-    const mode = getTurbineMode(el.data);
-    const label = String(data?.label || el.id);
-    if (mode === 'GENERATE' || mode === 'REJECT' || mode === 'STARTUP') {
-      const scheduleNumber = Number(data?.vScheduleNumber ?? 1);
-      if (!Number.isInteger(scheduleNumber) || scheduleNumber < 1) {
-        throw new Error(`Turbine ${label}: enter a positive whole-number gate schedule number.`);
-      }
-      if ((vSchedules[scheduleNumber] || []).length < 2) {
-        throw new Error(`Turbine ${label}: add at least two T/G pairs to VSCHEDULE ${scheduleNumber}.`);
-      }
-    }
-  });
-  governedTurbines.forEach(el => {
-    const data = el.data as any;
-    const label = String(data?.label || el.id);
-    const tw = Number(data?.governorTW);
-    const load = Number(data?.governorLoadHP);
-    const scheduleNumber = Number(data?.loadScheduleNumber ?? 1);
-    if (!Number.isFinite(tw) || tw <= 0) {
-      throw new Error(`Turbine ${label}: the imported legacy mode requires a positive water starting time TW.`);
-    }
-    if (data?.governorLoadHP === undefined || data?.governorLoadHP === null || data?.governorLoadHP === '' || !Number.isFinite(load) || load < 0) {
-      throw new Error(`Turbine ${label}: the imported legacy mode requires a valid generator load in HP.`);
-    }
-    if (!Number.isInteger(scheduleNumber) || scheduleNumber < 1) {
-      throw new Error(`Turbine ${label}: enter a positive whole-number load schedule number.`);
-    }
-    const existingLoad = loadScheduleOwners.get(scheduleNumber);
-    if (existingLoad !== undefined && existingLoad !== load) {
-      throw new Error(`Load schedule ${scheduleNumber} is assigned different loads. Give each different load its own schedule number.`);
-    }
-    loadScheduleOwners.set(scheduleNumber, load);
-  });
-
-  // Governor definitions must accompany GOVERN-mode turbines.
-  governedTurbines.forEach(el => {
-    const d = el.data as any;
-    addL('GOVERNOR');
-    addL(` ID ${d.label}`);
-    addL(` TW ${Number(d.governorTW)}`);
-    addL(' MECH');
-    addL('FINISH');
-    addL('');
-  });
-
-  allTurbines.forEach(el => {
-    const d = el.data;
-    if (!d) return;
-    const label = d.label as string;
-    if (!label || seenOpturb.has(label)) return;
-    seenOpturb.add(label);
-    const mode = getTurbineMode(d);
-    const scheduleNumber = Number((d as any).vScheduleNumber ?? 1);
-    addL('OPTURB');
-    addL(` ID ${label}`);
-    if (mode === 'GENERATE') {
-      addL(' GENERATE');
-      addL(` VSCHEDULE ${scheduleNumber}`);
-    } else if (mode === 'STARTUP') {
-      addL(' STARTUP');
-      addL(` VSCHEDULE ${scheduleNumber}`);
-    } else if (mode === 'REJECT') {
-      const toff = Number((d as any).turbineToff ?? 2);
-      if (!Number.isFinite(toff) || toff <= 0) {
-        throw new Error(`Turbine ${label}: enter a positive rejection time TOFF. A value of zero can cause severe simulation warnings.`);
-      }
-      addL(` REJECT TOFF ${toff}`);
-      addL(` VSCHEDULE ${scheduleNumber}`);
-    } else if (mode === 'GOVERN') {
-      addL(' GOVERN');
-      addL(` LSCHEDULE ${Number((d as any).loadScheduleNumber ?? 1)}`);
-    } else if (mode === 'OFF') {
-      addL(' OFF');
-    } else {
-      throw new Error(`Turbine ${label}: unsupported operation mode "${mode}". Choose GENERATE, OFF, REJECT, or STARTUP.`);
-    }
-    addL('FINISH');
-    addL('');
-  });
-
-  // VSCHEDULE blocks for turbines with GENERATE/REJECT/STARTUP modes.
-  const usedVScheduleNums = new Set<number>();
-  allTurbines.forEach(el => {
-    const mode = getTurbineMode(el.data);
-    if (mode === 'GENERATE' || mode === 'REJECT' || mode === 'STARTUP') {
-      const num = Number((el.data as any)?.vScheduleNumber ?? 1);
-      if (!isNaN(num)) usedVScheduleNums.add(num);
-    }
-  });
-  usedVScheduleNums.forEach(schedNum => {
-    const pts = vSchedules[schedNum] || [];
-    if (pts.length > 0) {
-      addL('SCHEDULE');
-      addL(` VSCHEDULE ${schedNum}`);
-      pts.forEach(p => addL(`   T ${p.t}   G ${p.g}`));
-      addL('FINISH');
-      addL('');
-    }
-  });
-
-  if (loadScheduleOwners.size > 0) {
-    const simulationEndTime = Math.max(...state.computationalParams.stages.map(stage => Number(stage.tmax) || 0));
-    loadScheduleOwners.forEach((loadHP, scheduleNumber) => {
-      addL('SCHEDULE');
-      addL(` LSCHEDULE ${scheduleNumber}`);
-      addL(`   T 0 LOAD ${loadHP}`);
-      addL(`   T ${simulationEndTime} LOAD ${loadHP}`);
-      addL('FINISH');
-      addL('');
-    });
-  }
 
   addL('');
   addL('');
@@ -792,14 +601,14 @@ export function generateInpFile(nodes: WhamoNode[], edges: WhamoEdge[], autoDown
           : edges.find(e => e.id === req.elementId);
 
         const edgeElemType = req.elementType === 'edge' ? (element?.data?.type as string) : null;
-        // All edge-type elements (conduit, dummy, pump, checkValve, turbine) use ELEM syntax
+        // All edge-type elements (conduit, dummy, pump, checkValve) use ELEM syntax
         const isElementEdge = req.elementType === 'edge';
         if (isElementEdge) {
           addL(` ELEM ${element?.data?.label || req.elementId} ${req.variables.join(' ')}`);
           return;
         }
 
-        const isSpecialElem = req.elementType === 'node' && (element?.data?.type === 'surgeTank' || element?.data?.type === 'pump' || element?.data?.type === 'checkValve' || element?.data?.type === 'turbine' || element?.type === 'surgeTank' || element?.type === 'pump' || element?.type === 'checkValve' || element?.type === 'turbine');
+        const isSpecialElem = req.elementType === 'node' && (element?.data?.type === 'surgeTank' || element?.data?.type === 'pump' || element?.data?.type === 'checkValve' || element?.type === 'surgeTank' || element?.type === 'pump' || element?.type === 'checkValve');
         const useElementRequest = isSpecialElem && req.isElement;
         
         const label = useElementRequest 

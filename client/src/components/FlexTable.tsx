@@ -44,7 +44,7 @@ function buildCacheUpdate(
 
 type FilterKey =
   | 'all' | 'conduit' | 'dummy'
-  | 'node' | 'reservoir' | 'junction' | 'surgeTank' | 'flowBoundary' | 'turbine';
+  | 'node' | 'reservoir' | 'junction' | 'surgeTank' | 'flowBoundary';
 
 interface UnifiedRow {
   id: string;
@@ -56,7 +56,7 @@ interface UnifiedRow {
 const NODE_TYPE_LABEL: Record<string, string> = {
   reservoir: 'Reservoir', node: 'Node', junction: 'Junction',
   surgeTank: 'Surge Tank', flowBoundary: 'Flow BC',
-  pump: 'Legacy element', checkValve: 'Legacy element', turbine: 'Turbine',
+  pump: 'Legacy element', checkValve: 'Legacy element',
   conduit: 'Conduit', dummy: 'Dummy Pipe',
 };
 const TYPE_BADGE: Record<string, string> = {
@@ -65,7 +65,6 @@ const TYPE_BADGE: Record<string, string> = {
   junction:     'bg-red-500 text-white',
   surgeTank:    'bg-orange-500 text-white',
   flowBoundary: 'bg-green-600 text-white',
-  turbine:      'bg-teal-600 text-white',
   conduit:      'bg-indigo-600 text-white',
   dummy:        'bg-purple-600 text-white',
 };
@@ -79,7 +78,6 @@ const FILTER_CHIPS: { key: FilterKey; label: string }[] = [
   { key: 'junction',    label: 'Junction'     },
   { key: 'surgeTank',   label: 'Surge Tank'   },
   { key: 'flowBoundary',label: 'Flow BC'      },
-  { key: 'turbine',     label: 'Turbine'      },
 ];
 
 function matchesFilter(row: UnifiedRow, filter: FilterKey): boolean {
@@ -102,7 +100,6 @@ const COLS: Record<FilterKey, ColKey[]> = {
                  'celerity','friction','manningsN','pipeE','pipeWT',
                  'hasAddedLoss','cplus','cminus','shapePairs','comment'],
   flowBoundary:['rowNum','unitToggle','label','nodeNum','elevation','schedNum','qSchedPairs','comment'],
-  turbine:     ['rowNum','unitToggle','label','nodeNum','elevation','turbineType','syncSpeed','turbineDiam','turbWr2','turbFriction','windage','operationMode','vScheduleNum','vSchedulePairs','comment'],
 };
 
 // ─── Pairs editor state ───────────────────────────────────────────────────────
@@ -110,7 +107,7 @@ interface PairsEditorState {
   open: boolean;
   rowId: string;
   rowKind: 'node' | 'edge';
-  pairsType: 'qSchedule' | 'hSchedule' | 'shapePairs' | 'vSchedule';
+  pairsType: 'qSchedule' | 'hSchedule' | 'shapePairs';
   scheduleNumber?: number;
 }
 
@@ -672,9 +669,6 @@ function ColHeader({ col, unit }: { col: ColKey; unit: UnitSystem }) {
     pumpStatus: 'Status', pumpType: 'PCHAR Type',
     rq: `RQ (${V})`, rhead: `RHEAD (${L})`, rspeed: 'RSPEED (RPM)', rtorque: 'RTOROUE', wr2: 'WR²',
     valveStatus: 'Status', valveDiam: `Diam (${L})`,
-    turbineType: 'TCHAR Type', syncSpeed: 'Sync Speed (RPM)', turbineDiam: `Diameter (${L})`, turbWr2: 'WR²',
-    turbFriction: 'Friction', windage: 'Windage', operationMode: 'Mode', vScheduleNum: 'V Sched #',
-    vSchedulePairs: 'V Schedule (T/G pairs)',
     comment: 'Comment',
   };
   return (
@@ -686,7 +680,7 @@ function ColHeader({ col, unit }: { col: ColKey; unit: UnitSystem }) {
 
 // ─── Row cell renderer ────────────────────────────────────────────────────────
 function RowCells({
-  col, row, idx, unit, globalUnit, changeEdge, changeNode, hSchedules, qSchedules, vSchedules, onOpenPairsEditor, onSetUnit,
+  col, row, idx, unit, globalUnit, changeEdge, changeNode, hSchedules, qSchedules, onOpenPairsEditor, onSetUnit,
   isHighlighted, onHighlightRow, pcharData,
 }: {
   col: ColKey;
@@ -698,8 +692,7 @@ function RowCells({
   changeNode: (f: string, v: string) => void;
   hSchedules: any[];
   qSchedules: Record<number, { time: number; flow: number | string }[]>;
-  vSchedules: Record<number, { t: number; g: number }[]>;
-  onOpenPairsEditor: (rowId: string, rowKind: 'node' | 'edge', pairsType: 'qSchedule' | 'hSchedule' | 'shapePairs' | 'vSchedule', scheduleNumber?: number) => void;
+  onOpenPairsEditor: (rowId: string, rowKind: 'node' | 'edge', pairsType: 'qSchedule' | 'hSchedule' | 'shapePairs', scheduleNumber?: number) => void;
   onSetUnit: (id: string, kind: 'node' | 'edge', unit: UnitSystem) => void;
   isHighlighted: boolean;
   onHighlightRow: () => void;
@@ -714,7 +707,6 @@ function RowCells({
   const isFlow = row.subType === 'flowBoundary';
   const isPump = row.subType === 'pump';
   const isCheckValve = row.subType === 'checkValve';
-  const isTurbine = row.subType === 'turbine';
 
   // Each row uses its own unit (per-element override) or falls back to global
   const rowUnit: UnitSystem = (d.unit as UnitSystem) || unit;
@@ -1116,78 +1108,6 @@ function RowCells({
         readOnly={!isCheckValve} dimmed={!isCheckValve}
         onChange={v => changeNode('valveDiam', v)} testId={`cell-valvediam-${row.id}`} />
     );
-    case 'turbineType': return (
-      <EditableCell key={col} value={isTurbine ? String(d.turbineType ?? 1) : ''} type="text" inputMode="decimal"
-        readOnly={!isTurbine} dimmed={!isTurbine}
-        onChange={v => change('turbineType', v)} testId={`cell-turbtype-${row.id}`} />
-    );
-    case 'syncSpeed': return (
-      <EditableCell key={col} value={isTurbine ? fmt(d.syncSpeed ?? 0) : ''} type="text" inputMode="decimal"
-        readOnly={!isTurbine} dimmed={!isTurbine}
-        onChange={v => change('syncSpeed', v)} testId={`cell-syncspeed-${row.id}`} />
-    );
-    case 'turbineDiam': return (
-      <EditableCell key={col} value={isTurbine ? fmt(d.turbineDiameter ?? '') : ''} type="text" inputMode="decimal"
-        readOnly={!isTurbine} dimmed={!isTurbine}
-        onChange={v => change('turbineDiameter', v)} testId={`cell-turbdiam-${row.id}`} />
-    );
-    case 'turbWr2': return (
-      <EditableCell key={col} value={isTurbine ? fmt(d.wr2 ?? 0) : ''} type="text" inputMode="decimal"
-        readOnly={!isTurbine} dimmed={!isTurbine}
-        onChange={v => change('wr2', v)} testId={`cell-turbwr2-${row.id}`} />
-    );
-    case 'turbFriction': return (
-      <EditableCell key={col} value={isTurbine ? fmt(d.turbFriction ?? 0) : ''} type="text" inputMode="decimal"
-        readOnly={!isTurbine} dimmed={!isTurbine}
-        onChange={v => change('turbFriction', v)} testId={`cell-turbfriction-${row.id}`} />
-    );
-    case 'windage': return (
-      <EditableCell key={col} value={isTurbine ? fmt(d.windage ?? 0) : ''} type="text" inputMode="decimal"
-        readOnly={!isTurbine} dimmed={!isTurbine}
-        onChange={v => change('windage', v)} testId={`cell-windage-${row.id}`} />
-    );
-    case 'operationMode': {
-      const mode = d.operationMode === 'TURBGOV' ? 'GOVERN' : d.operationMode === 'EMERGENCY' ? 'REJECT' : d.operationMode === 'TURBINE' ? 'OFF' : d.operationMode || 'OFF';
-      if (isTurbine && mode === 'GOVERN') {
-        return (
-          <td key={col} className="border-r border-slate-200 bg-slate-50 px-2 py-[7px] text-[12px] italic text-slate-500" title="Legacy value preserved from the imported file">
-            Legacy mode (imported)
-          </td>
-        );
-      }
-      return (
-        <SelectCell key={col} value={mode}
-          options={[{label:'GENERATE',value:'GENERATE'},{label:'OFF',value:'OFF'},{label:'REJECT',value:'REJECT'},{label:'STARTUP',value:'STARTUP'}]}
-          dimmed={!isTurbine} onChange={isTurbine ? v => change('operationMode', v) : undefined} testId={`cell-opmode-${row.id}`} />
-      );
-    }
-    case 'vScheduleNum': {
-      const normalizedMode = d.operationMode === 'TURBGOV' ? 'GOVERN' : d.operationMode === 'EMERGENCY' ? 'REJECT' : d.operationMode === 'TURBINE' ? 'OFF' : d.operationMode;
-      const needsVSched = normalizedMode === 'GENERATE' || normalizedMode === 'REJECT' || normalizedMode === 'STARTUP';
-      return (
-        <EditableCell key={col} value={isTurbine ? String(d.vScheduleNumber ?? 1) : ''} type="text" inputMode="decimal"
-          readOnly={!isTurbine || !needsVSched}
-          dimmed={!isTurbine || !needsVSched}
-          onChange={v => change('vScheduleNumber', v)} testId={`cell-vschednum-${row.id}`} />
-      );
-    }
-    case 'vSchedulePairs': {
-      const storedMode = d.operationMode as string;
-      const opMode = storedMode === 'TURBGOV' ? 'GOVERN' : storedMode === 'EMERGENCY' ? 'REJECT' : storedMode === 'TURBINE' ? 'OFF' : storedMode;
-      const hasVSched = isTurbine && (opMode === 'GENERATE' || opMode === 'REJECT' || opMode === 'STARTUP');
-      if (!hasVSched) return <NACell key={col} minW="min-w-[150px]" />;
-      const schedNum = Number(d.vScheduleNumber ?? 1);
-      const pts: { t: number; g: number }[] = vSchedules[schedNum] || [];
-      const pairs: PairPreview[] = pts.map(p => ({ time: p.t, value: p.g }));
-      return (
-        <PairsPreviewCell
-          key={col}
-          pairs={pairs}
-          applicable={true}
-          onEdit={() => onOpenPairsEditor(row.id, row.kind, 'vSchedule', schedNum)}
-        />
-      );
-    }
     case 'comment': return (
       <EditableCell key={col} value={d.comment ?? ''} onChange={v => change('comment', v)}
         testId={`cell-comment-${row.id}`} minW="min-w-[160px]" />
@@ -1198,7 +1118,7 @@ function RowCells({
 
 // ─── Main table ───────────────────────────────────────────────────────────────
 function UnifiedTable({
-  rows, filter, unit, hSchedules, qSchedules, vSchedules, pcharData,
+  rows, filter, unit, hSchedules, qSchedules, pcharData,
   onChangeEdge, onChangeNode, onSelectEdge, onSelectNode, onOpenPairsEditor, onSetUnit,
 }: {
   rows: UnifiedRow[];
@@ -1206,13 +1126,12 @@ function UnifiedTable({
   unit: UnitSystem;
   hSchedules: any[];
   qSchedules: Record<number, { time: number; flow: number | string }[]>;
-  vSchedules: Record<number, { t: number; g: number }[]>;
   pcharData: Record<number, PcharType>;
   onChangeEdge: (id: string, field: string, val: string, data: any) => void;
   onChangeNode: (id: string, field: string, val: string, data: any) => void;
   onSelectEdge: (id: string) => void;
   onSelectNode: (id: string) => void;
-  onOpenPairsEditor: (rowId: string, rowKind: 'node' | 'edge', pairsType: 'qSchedule' | 'hSchedule' | 'shapePairs' | 'vSchedule', scheduleNumber?: number) => void;
+  onOpenPairsEditor: (rowId: string, rowKind: 'node' | 'edge', pairsType: 'qSchedule' | 'hSchedule' | 'shapePairs', scheduleNumber?: number) => void;
   onSetUnit: (id: string, kind: 'node' | 'edge', unit: UnitSystem) => void;
 }) {
   const cols = COLS[filter] ?? COLS.all;
@@ -1264,7 +1183,6 @@ function UnifiedTable({
                     changeEdge={changeEdge} changeNode={changeNode}
                     hSchedules={hSchedules}
                     qSchedules={qSchedules}
-                    vSchedules={vSchedules}
                     onOpenPairsEditor={onOpenPairsEditor}
                     onSetUnit={onSetUnit}
                     isHighlighted={isHighlighted}
@@ -1289,7 +1207,6 @@ export function FlexTable({ open, onClose }: FlexTableProps) {
     hSchedules, updateHSchedule, addHSchedule,
     pcharData,
     qSchedules, updateQSchedule,
-    vSchedules, updateVSchedule, addVSchedule,
     applyMaterialToAllConduits, setApplyMaterialToAllConduits,
   } = useNetworkStore();
   const { toast } = useToast();
@@ -1351,7 +1268,6 @@ export function FlexTable({ open, onClose }: FlexTableProps) {
     junction:     supportedRows.filter(r => r.subType === 'junction').length,
     surgeTank:    supportedRows.filter(r => r.subType === 'surgeTank').length,
     flowBoundary: supportedRows.filter(r => r.subType === 'flowBoundary').length,
-    turbine:      supportedRows.filter(r => r.subType === 'turbine').length,
   }), [supportedRows]);
 
   const handleChangeEdge = useCallback((id: string, field: string, rawStr: string, currentData: any) => {
@@ -1424,7 +1340,7 @@ export function FlexTable({ open, onClose }: FlexTableProps) {
   const handleOpenPairsEditor = useCallback((
     rowId: string,
     rowKind: 'node' | 'edge',
-    pairsType: 'qSchedule' | 'hSchedule' | 'shapePairs' | 'vSchedule',
+    pairsType: 'qSchedule' | 'hSchedule' | 'shapePairs',
     scheduleNumber?: number
   ) => {
     setPairsEditor({ open: true, rowId, rowKind, pairsType, scheduleNumber });
@@ -1442,17 +1358,13 @@ export function FlexTable({ open, onClose }: FlexTableProps) {
       const row = allRows.find(r => r.id === pairsEditor.rowId);
       const pts = (row?.data?.shape as any[]) || [];
       return pts.map((p: any) => ({ time: String(p.e ?? 0), value: String(p.a ?? 0), d: String(p.d ?? '') }));
-    } else if (pairsEditor.pairsType === 'vSchedule') {
-      const schedNum = pairsEditor.scheduleNumber || 1;
-      const pts: { t: number; g: number }[] = vSchedules[schedNum] || [];
-      return pts.map(p => ({ time: String(p.t ?? 0), value: String(p.g ?? 0) }));
     } else {
       const schedNum = pairsEditor.scheduleNumber || 1;
       const sched = hSchedules?.find((s: any) => s.number === schedNum);
       const pts = sched?.points || [];
       return pts.map((p: any) => ({ time: String(p.time ?? 0), value: String(p.head ?? 0) }));
     }
-  }, [pairsEditor, allRows, hSchedules, qSchedules, vSchedules]);
+  }, [pairsEditor, allRows, hSchedules, qSchedules]);
 
   const handleSavePairs = useCallback((rows: PairRow[]) => {
     if (!pairsEditor) return;
@@ -1472,14 +1384,6 @@ export function FlexTable({ open, onClose }: FlexTableProps) {
         perimeter: 0,
       }));
       updateNodeData(pairsEditor.rowId, { shape });
-    } else if (pairsEditor.pairsType === 'vSchedule') {
-      const schedNum = pairsEditor.scheduleNumber || 1;
-      const points = rows.map(r => ({
-        t: parseFloat(r.time) || 0,
-        g: parseFloat(r.value) || 0,
-      }));
-      addVSchedule(schedNum);
-      updateVSchedule(schedNum, points);
     } else {
       const schedNum = pairsEditor.scheduleNumber || 1;
       const points = rows.map(r => ({
@@ -1489,7 +1393,7 @@ export function FlexTable({ open, onClose }: FlexTableProps) {
       addHSchedule(schedNum);
       updateHSchedule(schedNum, points);
     }
-  }, [pairsEditor, allRows, updateNodeData, updateQSchedule, updateHSchedule, addHSchedule, updateVSchedule, addVSchedule]);
+  }, [pairsEditor, allRows, updateNodeData, updateQSchedule, updateHSchedule, addHSchedule]);
 
   const visibleChips = FILTER_CHIPS.filter(c => counts[c.key as keyof typeof counts] > 0 || c.key === 'all');
 
@@ -1601,20 +1505,14 @@ export function FlexTable({ open, onClose }: FlexTableProps) {
     ? 'Edit Q Schedule Points'
     : pairsEditor?.pairsType === 'shapePairs'
     ? 'Edit Shape (E, A) Pairs'
-    : pairsEditor?.pairsType === 'vSchedule'
-    ? `Edit VSCHEDULE ${pairsEditor.scheduleNumber ?? 1} — Gate Time Pairs (G %)`
     : 'Edit T/H Pairs';
   const editorTimeLabel = pairsEditor?.pairsType === 'shapePairs'
     ? `E (${editorUnit === 'FPS' ? 'ft' : 'm'})`
-    : pairsEditor?.pairsType === 'vSchedule'
-    ? 'Time (T)'
     : 'Time (T)';
   const editorValueLabel = pairsEditor?.pairsType === 'qSchedule'
     ? `Flow (Q) (${editorUnit === 'FPS' ? 'ft³/s' : 'm³/s'})`
     : pairsEditor?.pairsType === 'shapePairs'
     ? `A (${editorUnit === 'FPS' ? 'ft²' : 'm²'})`
-    : pairsEditor?.pairsType === 'vSchedule'
-    ? 'Gate Opening (G %)'
     : `Head (H) (${editorUnit === 'FPS' ? 'ft' : 'm'})`;
 
   return (
@@ -1797,7 +1695,6 @@ export function FlexTable({ open, onClose }: FlexTableProps) {
             <UnifiedTable
               rows={filteredRows} filter={activeFilter} unit={globalUnit} hSchedules={hSchedules ?? []}
               qSchedules={qSchedules ?? {}}
-              vSchedules={vSchedules ?? {}}
               pcharData={pcharData ?? {}}
               onChangeEdge={handleChangeEdge} onChangeNode={handleChangeNode}
               onSelectEdge={handleSelectEdge} onSelectNode={handleSelectNode}
@@ -1807,7 +1704,6 @@ export function FlexTable({ open, onClose }: FlexTableProps) {
             <p className="text-[10px] text-black flex-none">
               Showing {filteredRows.length} of {supportedRows.length} supported elements ·
               Click any white cell to edit · Dimmed cells are read-only for that element type ·
-              Turbine V Schedule (T/G pairs) editable inline for GENERATE, REJECT, and STARTUP modes ·
               SI/FPS toggle applies globally · Per-row Unit column overrides individual elements · Amber border indicates per-element override
             </p>
           </div>
