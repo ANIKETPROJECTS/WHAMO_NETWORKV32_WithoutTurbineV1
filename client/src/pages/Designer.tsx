@@ -1568,7 +1568,7 @@ function DesignerInner() {
                         const typeName = d.type === 'checkValve' || d.type === 'pump' ? 'Legacy element'
                           : d.type === 'dummy' ? 'Dummy Pipe'
                           : d.type === 'conduit' ? 'Conduit'
-                          : d.type ? d.type.charAt(0).toUpperCase() + d.type.slice(1) : 'Edge';
+                          : 'Edge';
                         rows.push({ label: 'Type', value: typeName });
                         rows.push({ label: 'Label', value: String(d.label || '') });
                         if (d.length !== undefined && d.length !== '') rows.push({ label: `Length (${lenU})`, value: String(d.length) });
