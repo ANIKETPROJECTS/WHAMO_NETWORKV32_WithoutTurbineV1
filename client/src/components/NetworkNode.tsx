@@ -7,7 +7,6 @@ import yIntersectionIcon from '@assets/y-intersection_(1)_1779523210044.png';
 import waterTankIcon from '@assets/water-tank_(2)_1779523360829.png';
 import waterPumpIcon from '@assets/water-pump_1779523451215.png';
 import pipeIcon from '@assets/pipe_1779523475650.png';
-import turbineImgIcon from '@assets/turbine_1779523517554.png';
 import windIcon from '@assets/wind_1779523398812.png';
 
 const HandleStyle = "!w-6 !h-6 !bg-black !border-2 !border-white opacity-0 group-hover:opacity-100 transition-opacity";
@@ -145,57 +144,6 @@ export const CheckValveNode = memo(({ id, data, selected }: NodeProps) => {
     <TooltipWrapper content={<DataList data={displayData} title="Legacy element" />}>
       <IconNode nodeId={id} selected={!!selected} hasOrderError={hasOrderError}
         icon={pipeIcon} label={data.label as React.ReactNode} alt="Legacy element" />
-    </TooltipWrapper>
-  );
-});
-
-export const TurbineNode = memo(({ id, data, selected }: NodeProps) => {
-  const node = useNetworkStore(state => state.nodes.find(n => n.id === id));
-  const displayData = node ? node.data : data;
-  const hasOrderError = useNodeOrderError(id);
-  const borderColor = hasOrderError ? '#ef4444' : (selected ? '#052e16' : '#166534');
-  const bgColor     = hasOrderError ? '#ef4444' : '#16a34a';
-  return (
-    <TooltipWrapper content={<DataList data={displayData} title="Turbine Properties" />}>
-      <div style={{ position: 'relative', width: CIRCLE_SIZE, height: CIRCLE_SIZE }} className="group">
-        {/* Diamond shape: outer square rotated 45° */}
-        <div style={{
-          position: 'absolute',
-          inset: 0,
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-        }}>
-          <div style={{
-            width: 52,
-            height: 52,
-            background: bgColor,
-            border: `3px solid ${borderColor}`,
-            borderRadius: 4,
-            transform: 'rotate(45deg)',
-            boxShadow: selected ? '0 0 0 3px rgba(22,101,52,0.3)' : '0 2px 6px rgba(0,0,0,0.25)',
-            transition: 'all 0.15s',
-          }}>
-            {/* Counter-rotate content so icon/label stays upright */}
-            <div style={{
-              width: '100%', height: '100%',
-              transform: 'rotate(-45deg)',
-              display: 'flex', flexDirection: 'column',
-              alignItems: 'center', justifyContent: 'center', gap: 2,
-            }}>
-              <img
-                src={turbineImgIcon}
-                style={{ width: 24, height: 24, objectFit: 'contain', pointerEvents: 'none', filter: 'brightness(0) invert(1)' }}
-                alt="Turbine"
-              />
-              <span style={{ fontSize: 10, fontWeight: 700, color: '#fff', lineHeight: 1, whiteSpace: 'nowrap', userSelect: 'none' }}>
-                {data.label as React.ReactNode}
-              </span>
-            </div>
-          </div>
-        </div>
-        <AllHandles />
-      </div>
     </TooltipWrapper>
   );
 });

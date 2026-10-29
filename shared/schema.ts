@@ -16,7 +16,7 @@ export const insertProjectSchema = createInsertSchema(projects).omit({ id: true,
 // === APPLICATION TYPES (Network Elements) ===
 
 // Node Types
-export const nodeTypeSchema = z.enum(["reservoir", "node", "junction", "surgeTank", "flowBoundary", "pump", "checkValve", "turbine"]);
+export const nodeTypeSchema = z.enum(["reservoir", "node", "junction", "surgeTank", "flowBoundary", "pump", "checkValve"]);
 export type NodeType = z.infer<typeof nodeTypeSchema>;
 
 // Element Properties Schemas
@@ -80,7 +80,7 @@ export const flowBoundaryPropsSchema = z.object({
 });
 
 // Link/Conduit Types
-export const linkTypeSchema = z.enum(["conduit", "dummy", "pump", "checkValve", "turbine"]);
+export const linkTypeSchema = z.enum(["conduit", "dummy", "pump", "checkValve"]);
 export type LinkType = z.infer<typeof linkTypeSchema>;
 
 export const conduitPropsSchema = z.object({

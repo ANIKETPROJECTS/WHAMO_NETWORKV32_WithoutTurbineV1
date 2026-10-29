@@ -26,13 +26,6 @@ export interface PcharType {
   tratio: number[];    // flat qratio.length × sratio.length values
 }
 
-export interface TcharType {
-  gate: number[];        // Wicket-gate positions (percent of full opening)
-  head: number[];        // Head values
-  qMatrix: number[][];   // Flow matrix [gate.length rows × head.length cols]
-  effMatrix: number[][];  // Efficiency matrix [gate.length rows × head.length cols]
-}
-
 // Define base data structures for our specific engineering domain
 interface UnitCache {
   FPS?: Record<string, any>;
@@ -72,12 +65,6 @@ interface NodeData extends Record<string, unknown> {
   wr2?: number | string;
   pumpOpMode?: string;   // 'PUMP' | 'SHUTOFF' | 'MOTORSTARTUP' | 'NORMALSTOP'
   pumpToff?: number;     // TOFF value when pumpOpMode === 'SHUTOFF'
-  operationMode?: string;
-  vScheduleNumber?: number;
-  turbineToff?: number | string;
-  governorTW?: number | string;
-  governorLoadHP?: number | string;
-  loadScheduleNumber?: number;
 }
 
 interface EdgeData extends Record<string, unknown> {
@@ -116,18 +103,6 @@ interface EdgeData extends Record<string, unknown> {
   // CheckValve element-edge fields
   valveStatus?: string;
   valveDiam?: number | string;
-  // Turbine element-edge fields
-  turbineType?: number;
-  syncSpeed?: number | string;
-  turbFriction?: number | string;
-  windage?: number | string;
-  turbineDiameter?: number | string;
-  operationMode?: string;
-  vScheduleNumber?: number;
-  turbineToff?: number | string;
-  governorTW?: number | string;
-  governorLoadHP?: number | string;
-  loadScheduleNumber?: number;
   designHead?: number | string;
 }
 
@@ -201,7 +176,6 @@ interface NetworkState {
   applyMaterialToAllConduits: boolean;
   nodeSelectionSet: Set<string>;
   pcharData: Record<number, PcharType>;
-  tcharData: Record<number, TcharType>;
   vSchedules: Record<number, { t: number; g: number }[]>;
   nodeOrderErrorIds: string[];
   history: {
@@ -214,17 +188,14 @@ interface NetworkState {
   onEdgesChange: OnEdgesChange;
   onConnect: OnConnect;
   addNode: (type: NodeType, position: { x: number; y: number }) => void;
-  addEdgeElement: (type: 'pump' | 'checkValve' | 'turbine', sourceId: string, targetId: string) => void;
+  addEdgeElement: (type: 'pump' | 'checkValve', sourceId: string, targetId: string) => void;
   updateNodeData: (id: string, data: Partial<NodeData>) => void;
   updateEdgeData: (id: string, data: Partial<EdgeData>) => void;
   deleteElement: (id: string, type: 'node' | 'edge') => void;
   selectElement: (id: string | null, type: 'node' | 'edge' | null) => void;
-  loadNetwork: (nodes: WhamoNode[], edges: WhamoEdge[], params?: ComputationalParameters, requests?: OutputRequest[], projectName?: string, fileHandle?: FileSystemFileHandle, pcharData?: Record<number, PcharType>, snapshotTimes?: number[], nodeSelectionSet?: string[], tcharData?: Record<number, TcharType>, vSchedules?: Record<number, { t: number; g: number }[]>, unit?: UnitSystem) => void;
+  loadNetwork: (nodes: WhamoNode[], edges: WhamoEdge[], params?: ComputationalParameters, requests?: OutputRequest[], projectName?: string, fileHandle?: FileSystemFileHandle, pcharData?: Record<number, PcharType>, snapshotTimes?: number[], nodeSelectionSet?: string[], vSchedules?: Record<number, { t: number; g: number }[]>, unit?: UnitSystem) => void;
   clearNetwork: () => void;
   updatePcharData: (pumpType: number, data: PcharType) => void;
-  updateTcharData: (turbineType: number, data: TcharType) => void;
-  addTcharType: (typeNum?: number) => void;
-  deleteTcharType: (typeNum: number) => void;
   updateVSchedule: (schedNum: number, points: { t: number; g: number }[]) => void;
   addVSchedule: (schedNum: number) => void;
   deleteVSchedule: (schedNum: number) => void;
@@ -285,7 +256,6 @@ export const useNetworkStore = create<NetworkState>((set, get) => ({
   applyMaterialToAllConduits: false,
   nodeSelectionSet: new Set(),
   pcharData: {},
-  tcharData: {},
   vSchedules: {},
   nodeOrderErrorIds: [],
   history: {
@@ -345,7 +315,6 @@ export const useNetworkStore = create<NetworkState>((set, get) => ({
       rq: 'flow',
       rhead: 'elevation',
       valveDiam: 'diameter',
-      turbineDiameter: 'diameter',
     };
 
     const cacheableFields = Object.keys(fieldMapping);
@@ -567,7 +536,6 @@ export const useNetworkStore = create<NetworkState>((set, get) => ({
       rq: 'flow',
       rhead: 'elevation',
       valveDiam: 'diameter',
-      turbineDiameter: 'diameter',
     };
 
     const cacheableFields = Object.keys(fieldMapping);
@@ -849,29 +817,6 @@ export const useNetworkStore = create<NetworkState>((set, get) => ({
         initialData = { ...initialData, label: `VC${cvCount}`, valveStatus: 'OPEN' };
         break;
       }
-      case 'turbine': {
-        const turbCount = get().nodes.filter(n => n.type === 'turbine').length + 1;
-        const existingTcharTypes = Object.keys(get().tcharData).map(Number);
-        const newTcharType = existingTcharTypes.length > 0 ? Math.max(...existingTcharTypes) + 1 : 1;
-        initialData = {
-          ...initialData,
-          label: `T${turbCount}`,
-          turbineType: newTcharType,
-          syncSpeed: 0,
-          wr2: 0,
-          turbFriction: 0,
-          windage: 0,
-          operationMode: 'OFF',
-          vScheduleNumber: 1,
-          turbineToff: 2,
-          loadScheduleNumber: 1,
-        };
-        if (!get().tcharData[newTcharType]) {
-          const defaultTchar: TcharType = { gate: [], head: [], qMatrix: [], effMatrix: [] };
-          set({ tcharData: { ...get().tcharData, [newTcharType]: defaultTchar } });
-        }
-        break;
-      }
     }
 
     const newNode: WhamoNode = {
@@ -928,28 +873,6 @@ export const useNetworkStore = create<NetworkState>((set, get) => ({
         type: 'checkValve',
         valveStatus: 'OPEN',
       };
-    } else {
-      const turbCount = state.edges.filter(e => e.data?.type === 'turbine').length
-        + state.nodes.filter(n => n.type === 'turbine').length + 1;
-      const existingTcharTypes = Object.keys(state.tcharData).map(Number);
-      const newTcharType = existingTcharTypes.length > 0 ? Math.max(...existingTcharTypes) + 1 : 1;
-      initialData = {
-        label: `T${turbCount}`,
-        type: 'turbine',
-        turbineType: newTcharType,
-        syncSpeed: 0,
-        wr2: 0,
-        turbFriction: 0,
-        windage: 0,
-        operationMode: 'OFF',
-        vScheduleNumber: 1,
-        turbineToff: 2,
-        loadScheduleNumber: 1,
-      };
-      if (!state.tcharData[newTcharType]) {
-        const defaultTchar: TcharType = { gate: [], head: [], qMatrix: [], effMatrix: [] };
-        set({ tcharData: { ...get().tcharData, [newTcharType]: defaultTchar } });
-      }
     }
 
     const strokeColor = '#000000';
@@ -1036,9 +959,6 @@ export const useNetworkStore = create<NetworkState>((set, get) => ({
           } else if (newType === 'checkValve') {
             style = { stroke: '#000000', strokeWidth: 2 };
             markerEnd = { type: MarkerType.ArrowClosed, color: '#000000' };
-          } else if (newType === 'turbine') {
-            style = { stroke: '#000000', strokeWidth: 2 };
-            markerEnd = { type: MarkerType.ArrowClosed, color: '#000000' };
           }
 
           return { 
@@ -1113,7 +1033,7 @@ export const useNetworkStore = create<NetworkState>((set, get) => ({
     set({ selectedElementId: id, selectedElementType: type });
   },
 
-  loadNetwork: (nodes, edges, params, requests, projectName, fileHandle, pcharData, snapshotTimes, nodeSelectionSet, tcharData, vSchedules, unit?) => {
+  loadNetwork: (nodes, edges, params, requests, projectName, fileHandle, pcharData, snapshotTimes, nodeSelectionSet, vSchedules, unit?) => {
     const maxId = Math.max(
       ...nodes.map(n => parseInt(n.id) || 0),
       ...edges.map(e => parseInt(e.id) || 0),
@@ -1220,7 +1140,6 @@ export const useNetworkStore = create<NetworkState>((set, get) => ({
       projectName: projectName || get().projectName,
       loadedFileHandle: fileHandle || null,
       pcharData: pcharData || {},
-      tcharData: tcharData || {},
       vSchedules: vSchedules || {},
       nodeSelectionSet: Array.isArray(nodeSelectionSet) ? new Set(nodeSelectionSet) : new Set(),
       selectedElementId: null, 
@@ -1238,7 +1157,6 @@ export const useNetworkStore = create<NetworkState>((set, get) => ({
       hSchedules: [],
       qSchedules: {},
       pcharData: {},
-      tcharData: {},
       vSchedules: {},
       selectedElementId: null, 
       selectedElementType: null, 
@@ -1253,27 +1171,6 @@ export const useNetworkStore = create<NetworkState>((set, get) => ({
   updatePcharData: (pumpType, data) => {
     const existing = get().pcharData;
     set({ pcharData: { ...existing, [pumpType]: data } });
-  },
-
-  updateTcharData: (turbineType, data) => {
-    set({ tcharData: { ...get().tcharData, [turbineType]: data } });
-  },
-
-  addTcharType: (typeNum) => {
-    const existing = get().tcharData;
-    const existingNums = Object.keys(existing).map(Number);
-    const newNum = typeNum !== undefined
-      ? typeNum
-      : (existingNums.length > 0 ? Math.max(...existingNums) + 1 : 1);
-    if (existing[newNum] !== undefined) return;
-    const defaultTchar: TcharType = { gate: [], head: [], qMatrix: [], effMatrix: [] };
-    set({ tcharData: { ...existing, [newNum]: defaultTchar } });
-  },
-
-  deleteTcharType: (typeNum) => {
-    const existing = { ...get().tcharData };
-    delete existing[typeNum];
-    set({ tcharData: existing });
   },
 
   updateVSchedule: (schedNum, points) => {

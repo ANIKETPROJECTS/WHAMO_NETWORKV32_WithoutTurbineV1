@@ -16,7 +16,7 @@ export interface NodeSequenceViolation {
   elementType?: string;
 }
 
-const elementTypes = new Set(['pump', 'checkValve', 'turbine']);
+const elementTypes = new Set(['pump', 'checkValve']);
 const nodeElevationTypes = new Set(['reservoir', 'node', 'junction', 'surgeTank', 'flowBoundary']);
 
 export function requiresNodeElevation(
@@ -270,12 +270,6 @@ export function validateNetwork(nodes: WhamoNode[], edges: WhamoEdge[]): { error
     if (n.type === 'checkValve') {
       if (connections.length < 1) {
         addError(n.id, `Legacy element ${d.label} must connect to at least one pipe.`, d.label, n.type);
-      }
-    }
-
-    if (n.type === 'turbine') {
-      if (connections.length < 1) {
-        addError(n.id, `Turbine ${d.label} must connect to at least one pipe.`, d.label, n.type);
       }
     }
 

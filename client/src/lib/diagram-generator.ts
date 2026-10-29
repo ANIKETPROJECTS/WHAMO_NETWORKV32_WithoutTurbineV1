@@ -17,22 +17,18 @@ const COLORS: Record<string, { fill: string; stroke: string; text: string }> = {
   junction:     { fill: '#F44336', stroke: '#B71C1C', text: '#fff' },
   pump:         { fill: '#00BCD4', stroke: '#006064', text: '#fff' },
   checkValve:   { fill: '#37474F', stroke: '#102027', text: '#fff' },
-  turbine:      { fill: '#16a34a', stroke: '#166534', text: '#fff' },
 };
 function col(t: string) { return COLORS[t] ?? COLORS.node; }
 
 // Connection-point half-extents
-const TURB_D = 13; // diamond half-size (matches renderNode's D)
 function nHW(t: string) {
   if (t === 'reservoir' || t === 'flowBoundary') return RRW / 2;
   if (t === 'surgeTank') return STW / 2;
-  if (t === 'turbine') return TURB_D;
   return R;
 }
 function nHH(t: string) {
   if (t === 'surgeTank') return STH / 2;
   if (t === 'reservoir' || t === 'flowBoundary') return RRH / 2;
-  if (t === 'turbine') return TURB_D;
   return R;
 }
 
@@ -61,13 +57,6 @@ function renderNode(type: string, x: number, y: number, label: string, srcId: st
         stroke="rgba(255,255,255,0.7)" stroke-width="1.5"/>`;
     lbl = `<text class="lbl" x="${x}" y="${y - hh - 8}" text-anchor="middle" font-size="11"
       font-weight="600" fill="#111" font-family="Arial,sans-serif">${esc(label)}</text>`;
-  } else if (type === 'turbine') {
-    // Diamond shape: rotated square
-    const D = 13;
-    shape = `<polygon points="${x},${y - D} ${x + D},${y} ${x},${y + D} ${x - D},${y}"
-      fill="${c.fill}" stroke="${c.stroke}" stroke-width="2"/>`;
-    lbl = `<text class="lbl" x="${x}" y="${y - D - 5}" text-anchor="middle" font-size="11"
-      font-weight="600" fill="#111" font-family="Arial,sans-serif">${esc(label)}</text>`;
   } else {
     shape = `<circle cx="${x}" cy="${y}" r="${R}"
       fill="${c.fill}" stroke="${c.stroke}" stroke-width="2"/>`;
@@ -93,7 +82,7 @@ function getCanvasY(
     const n = nodes.find(n => n.id === srcId);
     return n?.position.y ?? 0;
   }
-  // Virtual node (inline pump / checkValve / turbine) — midpoint of its edge endpoints
+  // Virtual node (inline element) — midpoint of its edge endpoints
   const e = edges.find(e => e.id === srcId);
   if (!e) return 0;
   const src = nodes.find(n => n.id === e.source);
@@ -132,7 +121,7 @@ export function generateSystemDiagramSVG(
   type VE = { from: string; to: string; label: string; isDummy: boolean; srcEdgeId: string };
 
   // ── Build virtual graph ────────────────────────────────────────────────────
-  // Edge-based elements (pump/checkValve/turbine) become inline virtual nodes.
+  // Edge-based elements become inline virtual nodes.
   const vns: VN[] = nodes.map(n => ({
     id:      n.id,
     type:    n.type || 'node',
@@ -145,7 +134,7 @@ export function generateSystemDiagramSVG(
 
   edges.forEach(e => {
     const etype   = String(e.data?.type ?? '');
-    const isElem  = etype === 'pump' || etype === 'checkValve' || etype === 'turbine';
+    const isElem  = etype === 'pump' || etype === 'checkValve';
     const isDummy = etype === 'dummy';
     const elabel  = String(e.data?.label ?? '');
 

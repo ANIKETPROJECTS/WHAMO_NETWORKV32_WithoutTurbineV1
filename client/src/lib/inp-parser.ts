@@ -1,4 +1,4 @@
-import { WhamoNode, WhamoEdge, PcharType, TcharType } from './store';
+import { WhamoNode, WhamoEdge, PcharType } from './store';
 import { inferCrossSectionShape } from './cross-section-shapes';
 
 interface ParsedTopology {
@@ -18,7 +18,6 @@ interface ParsedElements {
     variable?: boolean; shapeType?: string; distance?: number; area?: number; d?: number; a?: number;
   }>;
   pumps: Map<string, { pumpType: number; rq: number; rhead: number; rspeed: number; rtorque: number; wr2: number }>;
-  turbines: Map<string, { turbineType: number; syncSpeed: number; wr2: number; turbFriction: number; windage: number; turbineDiameter?: number }>;
   oneway: Map<string, { diam: number }>;
   surgeTanks: Map<string, {
     stType: string; tankTop: number; tankBottom: number; diameter: number;
@@ -29,16 +28,7 @@ interface ParsedElements {
   }>;
   flowBCs: Map<string, { scheduleNumber: number }>;
   oppumps: Map<string, { mode: string; toff?: number }>;
-  opturbs: Map<string, {
-    mode: string;
-    vScheduleNumber?: number;
-    turbineToff?: number;
-    loadScheduleNumber?: number;
-    governorTW?: number;
-    governorLoadHP?: number;
-  }>;
   pchar: Map<number, PcharType>;
-  tchar: Map<number, TcharType>;
   vSchedules: Map<number, { t: number; g: number }[]>;
 }
 
@@ -133,23 +123,11 @@ function parseElementProperties(lines: string[]): ParsedElements {
   const reservoirs = new Map<string, { elevation: number; mode: string; hScheduleNumber?: number }>();
   const conduits = new Map<string, any>();
   const pumps = new Map<string, any>();
-  const turbines = new Map<string, any>();
   const oneway = new Map<string, { diam: number }>();
   const surgeTanks = new Map<string, any>();
   const flowBCs = new Map<string, { scheduleNumber: number }>();
   const oppumps = new Map<string, { mode: string; toff?: number }>();
-  const opturbs = new Map<string, {
-    mode: string;
-    vScheduleNumber?: number;
-    turbineToff?: number;
-    loadScheduleNumber?: number;
-    governorTW?: number;
-    governorLoadHP?: number;
-  }>();
-  const governors = new Map<string, { tw?: number }>();
-  const lSchedules = new Map<number, number>();
   const pchar = new Map<number, PcharType>();
-  const tchar = new Map<number, TcharType>();
   const vSchedules = new Map<number, { t: number; g: number }[]>();
 
   const joined = joinContinuationLines(lines);
@@ -161,28 +139,6 @@ function parseElementProperties(lines: string[]): ParsedElements {
     sratio: [], qratio: [], hratio: [], tratio: []
   };
   let hratioRow: number[] = [];
-
-  let inTchar = false;
-  let tcharType = 0;
-  let tcharSection: 'none' | 'gate' | 'head' | 'qmatrix' | 'efficiency' = 'none';
-  let tcharBuf: { gate: number[]; head: number[]; qMatrix: number[][]; effMatrix: number[][] } = {
-    gate: [], head: [], qMatrix: [], effMatrix: []
-  };
-
-  const flushTchar = () => {
-    if (tcharType > 0 && tcharBuf.gate.length > 0) {
-      tchar.set(tcharType, {
-        gate: [...tcharBuf.gate],
-        head: [...tcharBuf.head],
-        qMatrix: tcharBuf.qMatrix.map(r => [...r]),
-        effMatrix: tcharBuf.effMatrix.map(r => [...r]),
-      });
-    }
-    tcharBuf = { gate: [], head: [], qMatrix: [], effMatrix: [] };
-    tcharSection = 'none';
-    inTchar = false;
-    tcharType = 0;
-  };
 
   const flushPchar = () => {
     if (hratioRow.length > 0) {
@@ -210,33 +166,6 @@ function parseElementProperties(lines: string[]): ParsedElements {
     if (!trimmed) continue;
 
     const upper = trimmed.toUpperCase();
-
-    if (inTchar) {
-      if (/^FINISH\b/i.test(upper)) {
-        flushTchar();
-        continue;
-      }
-      if (/^TCHAR\s+TYPE\s+(\d+)/i.test(upper)) {
-        flushTchar();
-        inTchar = true;
-        const m2 = trimmed.match(/^TCHAR\s+TYPE\s+(\d+)/i);
-        tcharType = parseInt(m2![1]);
-        tcharSection = 'none';
-        continue;
-      }
-      if (/^GATE\b/i.test(upper)) { tcharSection = 'gate'; continue; }
-      if (/^HEAD\b/i.test(upper)) { tcharSection = 'head'; continue; }
-      if (/^QMATRIX\b/i.test(upper) || /^Q\b/i.test(upper)) { tcharSection = 'qmatrix'; continue; }
-      if (/^EFFICIENCY\b/i.test(upper)) { tcharSection = 'efficiency'; continue; }
-      const numsT = trimmed.split(/\s+/).map(parseFloat).filter(n => !isNaN(n));
-      if (numsT.length > 0) {
-        if (tcharSection === 'gate') tcharBuf.gate.push(...numsT);
-        else if (tcharSection === 'head') tcharBuf.head.push(...numsT);
-        else if (tcharSection === 'qmatrix') tcharBuf.qMatrix.push(numsT);
-        else if (tcharSection === 'efficiency') tcharBuf.effMatrix.push(numsT);
-      }
-      continue;
-    }
 
     if (inPchar) {
       if (/^FINISH\b/i.test(upper)) {
@@ -298,93 +227,6 @@ function parseElementProperties(lines: string[]): ParsedElements {
       continue;
     }
 
-    if (/^TCHAR\s+TYPE\s+(\d+)/i.test(trimmed)) {
-      const m = trimmed.match(/^TCHAR\s+TYPE\s+(\d+)/i);
-      tcharType = parseInt(m![1]);
-      inTchar = true;
-      tcharSection = 'none';
-      tcharBuf = { gate: [], head: [], qMatrix: [], effMatrix: [] };
-      continue;
-    }
-
-    if (/^TURBINE\b/i.test(upper)) {
-      const fullLine = [trimmed];
-      if (!/\bFINISH\b/i.test(trimmed)) {
-        for (let j = i + 1; j < lines.length; j++) {
-          const ln = lines[j].trim();
-          if (!ln) continue;
-          if (/^FINISH\b/i.test(ln)) { fullLine.push(ln); i = j; break; }
-          if (/^RESERVOIR\b|^CONDUIT\b|^PUMP\b|^TURBINE\b|^ONEWAY\b|^SURGETANK\b|^FLOWBC\b|^PCHAR\b|^TCHAR\b|^OPPUMP\b|^OPTURB\b/i.test(ln)) { i = j - 1; break; }
-          fullLine.push(ln);
-        }
-      }
-      const combined = fullLine.join(' ');
-      const idM = combined.match(/\bID\s+(\S+)/i);
-      const typeM = combined.match(/\bTYPE\s+(\d+)/i);
-      const rspeedM = combined.match(/\b(?:RSPEED|SYNCSPD)\s+([\-\d.]+)/i);
-      const wr2M = combined.match(/\bWR2\s+([\-\d.]+)/i);
-      const fricM = combined.match(/\bFRICTION\s+([\-\d.]+)/i);
-      const windM = combined.match(/\bWINDAGE\s+([\-\d.]+)/i);
-      const turbDiamM = combined.match(/\bDIAMETER\s+([\-\d.]+)/i);
-      if (idM) {
-        turbines.set(idM[1], {
-          turbineType: typeM ? parseInt(typeM[1]) : 1,
-          syncSpeed: rspeedM ? parseFloat(rspeedM[1]) : 0,
-          wr2: wr2M ? parseFloat(wr2M[1]) : 0,
-          turbFriction: fricM ? parseFloat(fricM[1]) : 0,
-          windage: windM ? parseFloat(windM[1]) : 0,
-          turbineDiameter: turbDiamM ? parseFloat(turbDiamM[1]) : undefined,
-        });
-      }
-      continue;
-    }
-
-    if (/^OPTURB\b/i.test(upper)) {
-      // Collect all lines up to FINISH into one combined string
-      const block = [trimmed];
-      for (let j = i + 1; j < lines.length; j++) {
-        const ln = lines[j].trim();
-        if (!ln) continue;
-        if (/^FINISH\b/i.test(ln)) { i = j; break; }
-        if (/^OPTURB\b|^OPPUMP\b|^SCHEDULE\b|^HISTORY\b|^CONTROL\b|^DISPLAY\b/i.test(ln)) { i = j - 1; break; }
-        block.push(ln);
-      }
-      const combined = block.join(' ');
-      const idM = combined.match(/\bID\s+(\S+)/i);
-      if (idM) {
-        const modeM = combined.match(/\b(GENERATE|GOVERN|OFF|REJECT|STARTUP|TURBGOV|EMERGENCY|TURBINE)\b/i);
-        const rawMode = modeM ? modeM[1].toUpperCase() : 'OFF';
-        const mode = rawMode === 'TURBGOV' ? 'GOVERN' : rawMode === 'EMERGENCY' ? 'REJECT' : rawMode === 'TURBINE' ? 'OFF' : rawMode;
-        const vSchedM = combined.match(/\bVSCHEDULE\s+(\d+)/i);
-        const vSchedNum = vSchedM ? parseInt(vSchedM[1]) : undefined;
-        const toffM = combined.match(/\bTOFF\s+([\d.+-]+)/i);
-        const lSchedM = combined.match(/\bLSCHEDULE\s+(\d+)/i);
-        opturbs.set(idM[1], {
-          mode,
-          vScheduleNumber: vSchedNum,
-          turbineToff: toffM ? parseFloat(toffM[1]) : undefined,
-          loadScheduleNumber: lSchedM ? parseInt(lSchedM[1]) : undefined,
-        });
-      }
-      continue;
-    }
-
-    if (/^GOVERNOR\b/i.test(upper)) {
-      const block = [trimmed];
-      for (let j = i + 1; j < lines.length; j++) {
-        const ln = lines[j].trim();
-        if (!ln) continue;
-        if (/^FINISH\b/i.test(ln)) { i = j; break; }
-        if (/^GOVERNOR\b|^OPTURB\b|^OPPUMP\b|^SCHEDULE\b|^TURBINE\b/i.test(ln)) { i = j - 1; break; }
-        block.push(ln);
-      }
-      const combined = block.join(' ');
-      const idM = combined.match(/\bID\s+(\S+)/i);
-      const twM = combined.match(/\bTW\s+([\d.+-]+)/i);
-      if (idM) governors.set(idM[1], { tw: twM ? parseFloat(twM[1]) : undefined });
-      continue;
-    }
-
     if (/^SCHEDULE\b/i.test(upper)) {
       // Collect the full block (SCHEDULE keyword line + all lines until FINISH)
       const block: string[] = [trimmed];
@@ -392,7 +234,7 @@ function parseElementProperties(lines: string[]): ParsedElements {
         const ln = lines[j].trim();
         if (!ln) continue;
         if (/^FINISH\b/i.test(ln)) { i = j; break; }
-        if (/^SCHEDULE\b|^HISTORY\b|^CONTROL\b|^DISPLAY\b|^OPTURB\b|^OPPUMP\b|^RESERVOIR\b|^CONDUIT\b|^TURBINE\b|^PUMP\b/i.test(ln)) { i = j - 1; break; }
+        if (/^SCHEDULE\b|^HISTORY\b|^CONTROL\b|^DISPLAY\b|^OPPUMP\b|^RESERVOIR\b|^CONDUIT\b|^PUMP\b/i.test(ln)) { i = j - 1; break; }
         block.push(ln);
       }
       // Only handle VSCHEDULE blocks here; skip HSCHEDULE/QSCHEDULE (handled elsewhere)
@@ -410,10 +252,6 @@ function parseElementProperties(lines: string[]): ParsedElements {
           }
           vSchedules.set(schedNum, pts);
         }
-      } else if (/\bLSCHEDULE\b/i.test(blockText)) {
-        const numM = blockText.match(/\bLSCHEDULE\s+(\d+)/i);
-        const loadM = blockText.match(/\bLOAD\s+([\d.+-]+)/i);
-        if (numM && loadM) lSchedules.set(parseInt(numM[1]), parseFloat(loadM[1]));
       }
       continue;
     }
@@ -430,7 +268,7 @@ function parseElementProperties(lines: string[]): ParsedElements {
           const ln = lines[j].trim();
           if (!ln) continue;
           if (/^FINISH\b/i.test(ln)) { fullLine.push(ln); i = j; break; }
-          if (/^RESERVOIR\b|^CONDUIT\b|^PUMP\b|^ONEWAY\b|^TURBINE\b|^SURGETANK\b|^FLOWBC\b|^PCHAR\b|^OPPUMP\b|^OPTURB\b/i.test(ln)) { i = j - 1; break; }
+          if (/^RESERVOIR\b|^CONDUIT\b|^PUMP\b|^ONEWAY\b|^SURGETANK\b|^FLOWBC\b|^PCHAR\b|^OPPUMP\b/i.test(ln)) { i = j - 1; break; }
           fullLine.push(ln);
         }
       }
@@ -679,20 +517,7 @@ function parseElementProperties(lines: string[]): ParsedElements {
   if (inPchar) {
     flushPchar();
   }
-  if (inTchar) {
-    flushTchar();
-  }
-
-  opturbs.forEach((op, id) => {
-    if (op.mode === 'GOVERN' && op.loadScheduleNumber !== undefined) {
-      const load = lSchedules.get(op.loadScheduleNumber);
-      if (load !== undefined) op.governorLoadHP = load;
-    }
-    const governor = governors.get(id);
-    if (governor?.tw !== undefined) op.governorTW = governor.tw;
-  });
-
-  return { reservoirs, conduits, pumps, turbines, oneway, surgeTanks, flowBCs, oppumps, opturbs, pchar, tchar, vSchedules };
+  return { reservoirs, conduits, pumps, oneway, surgeTanks, flowBCs, oppumps, pchar, vSchedules };
 }
 
 /**
