@@ -189,3 +189,31 @@ mtime_ms = 1793330870894
 storage_uri = "gcs://replit-rams-assets-sisko/rams/assets/repl:95f38540-6dc6-4a71-9d87-5faf7c50ecf2/b6b12998-b48e-464a-b7cc-2069966b0175/ba365cac-f2e1-4aa6-8579-53fce6d56a55"
 storage_version_token = "1793330975981044"
 content_type = "application/vnd.openxmlformats-officedocument.presentationml.presentation"
+
+[[outputs]]
+id = "-AGIwplRvy_xA9MmVkEFG"
+uri = "file://generated-artifacts/WHAMO_Network_Designer_User_Manual.docx"
+type = "word_document"
+title = "WHAMO Network Designer User Manual — Without Turbine"
+description = "Updated Word manual with turbine-related sections, fields, table entries, and references removed."
+logical_id = "b6ef6d2c-e30e-43fb-8b6b-99c27badf2d2"
+content_hash = "sha256:e4eac5afc524046d8b1f90e729f1864a7a88a429c674c2edd2ffb98243b19bfd"
+size = 32317
+mtime_ms = 1793346192936
+storage_uri = "gcs://replit-rams-assets-sisko/rams/assets/repl:95f38540-6dc6-4a71-9d87-5faf7c50ecf2/b6ef6d2c-e30e-43fb-8b6b-99c27badf2d2/4d0eb159-4833-4fb9-b324-95c81285b9c1"
+storage_version_token = "1793346201669339"
+content_type = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+
+[[outputs]]
+id = "T07nSK1xfqN8c9v-Fhl9f"
+uri = "file://generated-artifacts/WHAMO_Network_Designer_Project_Report.docx"
+type = "word_document"
+title = "WHAMO Network Designer Project Report — Without Turbine"
+description = "Updated Word project report with turbine-related scope, calculations, test evidence, limitations, and references removed."
+logical_id = "398e9d6a-1e12-4828-9c18-9fc253e46f65"
+content_hash = "sha256:d2634b690171b0a6d8c0148724efd315c043e92713c62171d8b1d13d10150ae5"
+size = 41338
+mtime_ms = 1793346192972
+storage_uri = "gcs://replit-rams-assets-sisko/rams/assets/repl:95f38540-6dc6-4a71-9d87-5faf7c50ecf2/398e9d6a-1e12-4828-9c18-9fc253e46f65/3e337a2f-1cf4-491d-8690-d6bba40913e0"
+storage_version_token = "1793346203039870"
+content_type = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
