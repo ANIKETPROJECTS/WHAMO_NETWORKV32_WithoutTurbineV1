@@ -175,3 +175,17 @@ mtime_ms = 1793192706448
 storage_uri = "gcs://replit-rams-assets-sisko/rams/assets/repl:76a027f9-6981-4ce3-9931-7aed0b639812/300590d4-7a20-4c9a-97f7-41c6ff210079/b399284b-90fd-4c57-a1ea-b7472e349d34"
 storage_version_token = "1793192726765878"
 content_type = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+
+[[outputs]]
+id = "YrEQ8lPZpTEFd81SzkpDh"
+uri = "file://generated-artifacts/WHAMO_Network_Designer_Team_Airavata.pptx"
+type = "slides"
+title = "WHAMO Network Designer — Team Airavata"
+description = "A 9-slide, non-technical overview based on ADDITIONAL_FEATURES.md, with the current software sign-in screenshot and clearly labeled illustrative visuals."
+logical_id = "b6b12998-b48e-464a-b7cc-2069966b0175"
+content_hash = "sha256:dba53633d8104996bf782623449efe43afc7837dda6969fed3dfc1f9658b1f33"
+size = 354318
+mtime_ms = 1793330870894
+storage_uri = "gcs://replit-rams-assets-sisko/rams/assets/repl:95f38540-6dc6-4a71-9d87-5faf7c50ecf2/b6b12998-b48e-464a-b7cc-2069966b0175/ba365cac-f2e1-4aa6-8579-53fce6d56a55"
+storage_version_token = "1793330975981044"
+content_type = "application/vnd.openxmlformats-officedocument.presentationml.presentation"
