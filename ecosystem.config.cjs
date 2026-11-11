@@ -6,6 +6,7 @@ module.exports = {
       env: {
         NODE_ENV: "production",
         PORT: 3006,
+        WHAMO_USE_XVFB: "true",
       }
     }
   ]

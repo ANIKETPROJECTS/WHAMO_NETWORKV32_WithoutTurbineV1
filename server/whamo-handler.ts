@@ -38,7 +38,12 @@ export function setupWhamoRoutes(app: any, authenticateToken: any) {
       // 3. Pass filenames via stdin
       const stdinContent = `input.inp\ninput_OUT.OUT\ninput_PLT.PLT\ninput_SHEET.TAB\n`;
 
-      const child = execFile("wine", ["whamo.exe"], { cwd: runDir, timeout: 60000, maxBuffer: 1024 * 1024 * 100 }, (error, stdout, stderr) => {
+      // On headless Linux VPS deployments, run Wine inside a temporary X display.
+      const useXvfb = process.env.WHAMO_USE_XVFB === "true";
+      const command = useXvfb ? "xvfb-run" : "wine";
+      const commandArgs = useXvfb ? ["-a", "wine", "whamo.exe"] : ["whamo.exe"];
+
+      const child = execFile(command, commandArgs, { cwd: runDir, timeout: 60000, maxBuffer: 1024 * 1024 * 100 }, (error, stdout, stderr) => {
         if (error) {
           console.error("WHAMO execution error:", error);
           cleanup();

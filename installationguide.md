@@ -13,7 +13,7 @@ Complete these checks before making the application available on the public inte
 3. **Use a production MongoDB deployment.** The application requires `MONGODB_URI`. Restrict database network access to the application server and enable backups. See [mongodb-uri-creation-guide.md](mongodb-uri-creation-guide.md) for Atlas and Ubuntu MongoDB setup.
 4. **Set a private signing secret.** Set `JWT_SECRET` to a newly generated, random value. The application accepts `SESSION_SECRET` as a fallback, but `JWT_SECRET` is preferred.
 5. **Use HTTPS.** Keep the Node.js port private behind Nginx or IIS; expose the website through HTTPS.
-6. **WHAMO execution is optional.** The application can create input files and view output files without a server-side WHAMO engine. Server-side `.OUT` generation requires a properly licensed `WHAMO.EXE` and a compatible runtime. The Windows instructions below explain a limitation in the current execution handler.
+6. **Install the WHAMO runtime on Ubuntu.** The app runs the 32-bit Windows WHAMO engine with Wine inside Xvfb for headless `.OUT` generation. Install Wine's 32-bit support, Xvfb, and `xauth` as described below. The Windows instructions explain why the current server-side handler is Linux-only.
 
 ## 1. Linux VPS (Ubuntu)
 
@@ -29,14 +29,27 @@ sudo apt install -y ca-certificates curl git nginx
 curl -fsSL https://deb.nodesource.com/setup_22.x | sudo -E bash -
 sudo apt install -y nodejs
 sudo npm install --global pm2
+sudo dpkg --add-architecture i386
+sudo apt update
+sudo apt install -y wine wine32:i386 wine64 xvfb xauth
 node --version
 npm --version
 pm2 --version
+wine --version
+xvfb-run --help
 ```
 
 Use a currently supported Node.js LTS release. The project was configured in Replit with Node.js 20; run the production build and smoke test if using a newer runtime.
 
 Create a DNS `A` record for your domain (for example, `whamo.example.com`) that points to the VPS public IPv4 address. Add an `AAAA` record only if the VPS has working public IPv6.
+
+The bundled WHAMO executable is a 32-bit Windows console program. Initialize Wine as the same Linux account that will run PM2:
+
+```bash
+xvfb-run -a wineboot --init
+```
+
+This creates Wine's initial compatibility environment under that account's home directory. Do not run this as `root` if PM2 will run as your normal SSH login.
 
 ### 1.2 Clone the project and build it
 
@@ -95,7 +108,7 @@ pm2 start ecosystem.config.cjs
 pm2 status
 ```
 
-The PM2 config sets the app name to `whamo-app` and listens on port `3006`. Check the application logs:
+The PM2 config sets the app name to `whamo-app`, listens on port `3006`, and enables Xvfb for WHAMO runs. The server handler starts each simulation through `xvfb-run -a wine whamo.exe`; do not wrap `pm2 start` itself in `xvfb-run`. Check the application logs:
 
 ```bash
 pm2 logs whamo-app
@@ -326,16 +339,13 @@ pnpm --filter @workspace/whamo-viewer run build
 
 The same `artifacts\whamo-viewer\dist\public` directory can be set as the physical path for a separate IIS site with HTTPS.
 
-## 4. Optional server-side WHAMO execution on Linux
+## 4. Server-side WHAMO execution
 
-The server-side `.OUT` endpoint requires all of the following:
+On Ubuntu, the application runs the bundled 32-bit `server/engines/WHAMO.EXE` using Wine. For a headless VPS, the PM2 config enables `WHAMO_USE_XVFB`, and the handler runs Wine inside `xvfb-run -a` for each simulation. This requires the `wine32:i386`, `wine64`, `xvfb`, and `xauth` packages installed in step 1.1, and Wine initialized under the same Linux account that runs PM2.
 
-1. A WHAMO executable that you are authorized to use on the server.
-2. A compatible Wine installation.
-3. The executable at `server/engines/WHAMO.EXE`, relative to the application directory.
-4. A service account allowed to execute it and write temporary files under the project's `temp` directory.
+If a WHAMO run fails, check `pm2 logs whamo-app` and confirm `wine --version`, `xvfb-run --help`, and `xvfb-run -a wineboot --init` succeed when run as the PM2 account. The engine also needs permission to write to the project's `temp` directory.
 
-The executable is not included in this project. Confirm licensing and compatibility with the WHAMO supplier or project authority before installation. If these conditions are not met, the Designer can still generate `.INP` files and users can load separately generated `.OUT` files.
+The WHAMO executable is included in this project. Confirm you are authorized to deploy and run it on the VPS. The current server-side execution handler invokes Wine and is intended for Linux; Windows Server requires a separate native-Windows implementation.
 
 ## 5. Updating the installation
 
