@@ -9,8 +9,8 @@ The examples use Ubuntu Linux and Windows Server. Replace example paths, domain 
 Complete these checks before making the application available on the public internet:
 
 1. **Replace the development accounts.** On startup, the current application seeds default administrator and demo accounts. Change or remove that behavior in `server/auth/inMemoryUserStore.ts`, and establish a unique administrator account before public access. Do not rely on development defaults.
-2. **Rotate credentials stored in the existing PM2 example.** `ecosystem.config.cjs` contains hard-coded deployment credentials. Do not use it as-is. Rotate the database credential and signing secret, then provide new values through the server's environment instead.
-3. **Use a production MongoDB deployment.** The application requires `MONGODB_URI`. Restrict database access to the VPS, use a dedicated database user with only the required permissions, and enable backups.
+2. **Rotate previously exposed credentials.** An earlier version of `ecosystem.config.cjs` contained a database password and signing secret. Treat those values as exposed: replace the MongoDB password and use a new `JWT_SECRET`. The current PM2 config reads secrets from the environment instead of storing them in the project.
+3. **Use a production MongoDB deployment.** The application requires `MONGODB_URI`. Restrict database network access to the application server and enable backups. See [mongodb-uri-creation-guide.md](mongodb-uri-creation-guide.md) for Atlas and Ubuntu MongoDB setup.
 4. **Set a private signing secret.** Set `JWT_SECRET` to a newly generated, random value. The application accepts `SESSION_SECRET` as a fallback, but `JWT_SECRET` is preferred.
 5. **Use HTTPS.** Keep the Node.js port private behind Nginx or IIS; expose the website through HTTPS.
 6. **WHAMO execution is optional.** The application can create input files and view output files without a server-side WHAMO engine. Server-side `.OUT` generation requires a properly licensed `WHAMO.EXE` and a compatible runtime. The Windows instructions below explain a limitation in the current execution handler.
@@ -28,124 +28,100 @@ sudo apt update
 sudo apt install -y ca-certificates curl git nginx
 curl -fsSL https://deb.nodesource.com/setup_22.x | sudo -E bash -
 sudo apt install -y nodejs
+sudo npm install --global pm2
 node --version
 npm --version
+pm2 --version
 ```
 
 Use a currently supported Node.js LTS release. The project was configured in Replit with Node.js 20; run the production build and smoke test if using a newer runtime.
 
 Create a DNS `A` record for your domain (for example, `whamo.example.com`) that points to the VPS public IPv4 address. Add an `AAAA` record only if the VPS has working public IPv6.
 
-### 1.2 Create an application account and copy the project
+### 1.2 Clone the project and build it
 
-Create a restricted Linux service account and application directory:
-
-```bash
-sudo useradd --system --create-home --home-dir /opt/whamo \
-  --shell /usr/sbin/nologin whamo
-sudo mkdir -p /opt/whamo/app
-sudo chown -R whamo:whamo /opt/whamo
-```
-
-Clone the repository (or copy the project release archive) into `/opt/whamo/app`:
+Use your normal SSH login account; these instructions do not create a separate Linux service user. Clone the repository into a folder in your home directory:
 
 ```bash
-sudo -u whamo git clone <REPOSITORY_URL> /opt/whamo/app
+cd "$HOME"
+git clone <REPOSITORY_URL> WHAMO
+cd "$HOME/WHAMO"
+npm install
+npm run build
 ```
 
-Install dependencies and build the production app:
+The build creates `dist/index.cjs` and the static site under `dist/public`.
+
+### 1.3 Set the database URI and signing secret
+
+Create the MongoDB URI using [mongodb-uri-creation-guide.md](mongodb-uri-creation-guide.md). Create a private environment file in your home directory, outside the cloned project:
 
 ```bash
-cd /opt/whamo/app
-sudo -u whamo npm ci
-sudo -u whamo npm run build
+nano "$HOME/.whamo.env"
 ```
 
-The build creates `dist/index.cjs` and the static site under `dist/public`. Install the full dependency set before building; the build uses development dependencies such as Vite.
-
-### 1.3 Configure MongoDB and application secrets
-
-Create a MongoDB database and user, then allow connections from the VPS's outbound IP address in the database provider's network settings. Keep the database password URL-encoded inside the connection string if it contains special characters.
-
-Create a private environment file outside the project directory:
-
-```bash
-sudo install -d -m 0750 -o root -g whamo /etc/whamo
-sudo nano /etc/whamo/whamo.env
-```
-
-Add these values, replacing the placeholders:
+Add the following lines, replacing the MongoDB URI with your real URI and the JWT secret with a fresh random value:
 
 ```text
-MONGODB_URI=mongodb+srv://<database-user>:<url-encoded-password>@<cluster>/<database>?retryWrites=true&w=majority
-JWT_SECRET=<random-secret>
-PORT=5000
+MONGODB_URI='mongodb+srv://<database-user>:<url-encoded-password>@<cluster-host>/whamo?retryWrites=true&w=majority'
+JWT_SECRET='paste-the-generated-secret-here'
+PORT=3006
 ```
 
-Generate a signing secret on the VPS and copy its output into the `JWT_SECRET` value:
+Replace the sample URI with the one you created, then generate a signing secret:
 
 ```bash
 openssl rand -base64 48
 ```
 
-Save and restrict the environment file:
+Paste the generated value into `JWT_SECRET`, save the file, and restrict access to it:
 
 ```bash
-sudo chown root:whamo /etc/whamo/whamo.env
-sudo chmod 0640 /etc/whamo/whamo.env
+chmod 600 "$HOME/.whamo.env"
 ```
 
 Do not commit this file or print its contents into logs or support messages.
 
-### 1.4 Create a systemd service
+### 1.4 Start the application with PM2
 
-Find the Node.js path:
-
-```bash
-command -v node
-```
-
-Create the service definition:
+Load the private environment values into your shell, then start the app with the repository's PM2 configuration:
 
 ```bash
-sudo nano /etc/systemd/system/whamo.service
+set -a
+source "$HOME/.whamo.env"
+set +a
+cd "$HOME/WHAMO"
+pm2 start ecosystem.config.cjs
+pm2 status
 ```
 
-Use this configuration, changing the `ExecStart` Node.js path if `command -v node` returned a different one:
-
-```ini
-[Unit]
-Description=WHAMO Network Designer
-After=network-online.target
-Wants=network-online.target
-
-[Service]
-Type=simple
-User=whamo
-Group=whamo
-WorkingDirectory=/opt/whamo/app
-EnvironmentFile=/etc/whamo/whamo.env
-Environment=NODE_ENV=production
-ExecStart=/usr/bin/node /opt/whamo/app/dist/index.cjs
-Restart=on-failure
-RestartSec=5
-UMask=0077
-NoNewPrivileges=true
-
-[Install]
-WantedBy=multi-user.target
-```
-
-Enable and start it:
+The PM2 config sets the app name to `whamo-app` and listens on port `3006`. Check the application logs:
 
 ```bash
-sudo systemctl daemon-reload
-sudo systemctl enable --now whamo
-sudo systemctl status whamo
-sudo journalctl -u whamo -n 100 --no-pager
+pm2 logs whamo-app
 ```
 
-The app listens on port `5000` by default (or the `PORT` value in the environment). Confirm the service starts and connects to MongoDB before configuring the public proxy.
+Configure PM2 to restart the app after a server reboot. Run:
+
+```bash
+pm2 startup
+```
+
+PM2 prints a command beginning with `sudo`; copy and run that exact command, then save the running app list:
+
+```bash
+pm2 save
+```
+
+The PM2 process list contains the environment that was loaded when the app started. Keep the PM2 home directory private. Whenever you change `.whamo.env`, reload it and update the running process:
+
+```bash
+set -a
+source "$HOME/.whamo.env"
+set +a
+pm2 restart whamo-app --update-env
+pm2 save
+```
 
 ### 1.5 Configure Nginx and HTTPS
 
@@ -163,7 +139,7 @@ server {
     server_name whamo.example.com;
 
     location / {
-        proxy_pass http://127.0.0.1:5000;
+        proxy_pass http://127.0.0.1:3006;
         proxy_http_version 1.1;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
@@ -199,14 +175,14 @@ sudo ufw enable
 sudo ufw status
 ```
 
-Do not open port `5000` to the public internet. The public site should be served through Nginx over HTTPS.
+Do not open port `3006` to the public internet. The public site should be served through Nginx over HTTPS.
 
 ### 1.6 Check the installation
 
-Open `https://whamo.example.com/login` in a browser. Check the service logs if it does not load:
+Open `https://whamo.example.com/login` in a browser. Check the PM2 logs if it does not load:
 
 ```bash
-sudo journalctl -u whamo -f
+pm2 logs whamo-app
 ```
 
 Confirm that MongoDB is reachable and that the production account setup from **Important production checks** is complete before inviting users.
@@ -368,12 +344,16 @@ Before upgrading, back up the MongoDB database and any project files that are st
 **Ubuntu:**
 
 ```bash
-cd /opt/whamo/app
-sudo -u whamo git pull
-sudo -u whamo npm ci
-sudo -u whamo npm run build
-sudo systemctl restart whamo
-sudo systemctl status whamo
+cd "$HOME/WHAMO"
+git pull
+npm install
+npm run build
+set -a
+source "$HOME/.whamo.env"
+set +a
+pm2 restart whamo-app --update-env
+pm2 save
+pm2 status
 ```
 
 **Windows:** update the project files, run `npm ci` and `npm run build` from PowerShell, then restart the `WHAMO-Designer` service. Check the service logs and verify both the login page and MongoDB connection after every update.
